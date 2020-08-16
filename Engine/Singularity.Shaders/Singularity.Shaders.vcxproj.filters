@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Vertex">
+      <UniqueIdentifier>{3dcf2717-0242-4741-b9bf-2b745841a5b9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Fragment">
+      <UniqueIdentifier>{af873066-a8b7-4ded-b4a8-1e88ac88dd02}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Fragment\shader.frag">
+      <Filter>Fragment</Filter>
+    </None>
+    <None Include="Vertex\shader.vert">
+      <Filter>Vertex</Filter>
+    </None>
+    <None Include="compile.bat" />
+  </ItemGroup>
+</Project>
