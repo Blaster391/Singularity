@@ -398,4 +398,6 @@ FodyWeavers.xsd
 
 
 ############################ Project Specific ##############################
+# built shaders
+.spv
 
