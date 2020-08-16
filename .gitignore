@@ -394,10 +394,9 @@ FodyWeavers.xsd
 # Executables
 *.exe
 *.out
-*.app
 
 
 ############################ Project Specific ##############################
 # built shaders
-.spv
+*.spv
 
