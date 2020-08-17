@@ -3,7 +3,8 @@
 #include <vulkan/vulkan.hpp>
 
 #include <Singularity.Core/CoreDeclare.h>
-
+#include <Singularity.Render/Device.h>
+#include <Singularity.Render/Validation.h>
 
 namespace Singularity
 {
@@ -14,23 +15,6 @@ namespace Singularity
 
 	namespace Render
 	{
-		struct QueueFamilies
-		{
-			std::optional<uint32> m_graphicsFamily;
-			std::optional<uint32> m_presentFamily;
-
-			bool IsValid() const
-			{
-				return m_graphicsFamily.has_value() && m_presentFamily.has_value();
-			}
-		};
-
-		struct SwapChainSupportDetails {
-			VkSurfaceCapabilitiesKHR m_capabilities;
-			std::vector<VkSurfaceFormatKHR> m_formats;
-			std::vector<VkPresentModeKHR> m_presentModes;
-		};
-
 		class Renderer
 		{
 		public:
@@ -39,32 +23,19 @@ namespace Singularity
 
 			void Update(float _timeStep);
 
-		private:
-			
+			VkInstance GetInstance() const { return m_instance; }
+			VkSurfaceKHR GetSurface() const { return m_surface; }
 
+			Device const& GetDevice() const { return m_device; }
+			Validation const& GetValidation() const { return m_validation; }
+
+		private:
 			void Initialize();
 			void Shutdown();
 
 			void CreateInstance();
 			void CheckExtensions();
 			std::vector<const char*> GetRequiredExtensions() const;
-
-			bool UseValidationLayers() const; // TODO - VALIDATION.h
-			bool ValidationLayersSupported() const;
-			VkDebugUtilsMessengerCreateInfoEXT GetDebugUtilsCreateInfo() const;
-			void SetupValidationLayers();
-
-			void SelectPhysicalDevice(); // TODO - DEVICE.h
-			bool IsPhysicalDeviceSuitable(VkPhysicalDevice _device) const;
-			bool HasExtensionSupport(VkPhysicalDevice _device) const;
-			bool HasSwapChainSupport(VkPhysicalDevice _device) const;
-			QueueFamilies FindQueueFamilies(VkPhysicalDevice _device) const;
-			SwapChainSupportDetails FindSwapChainSupport(VkPhysicalDevice _device) const;
-
-			VkDeviceQueueCreateInfo GetDeviceQueueCreateInfo(uint32 queueFamily) const;
-			void CreateLogicalDevice();
-
-			void SetDeviceQueues();
 
 			void CreateSurface();
 
@@ -88,15 +59,6 @@ namespace Singularity
 			void CreateSemaphores();
 
 			VkInstance m_instance;
-			VkDebugUtilsMessengerEXT m_debugMessenger;
-
-			VkDevice m_logicalDevice;
-			VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-
-			VkQueue m_graphicsQueue;
-			VkQueue m_presentQueue;
-			QueueFamilies m_deviceQueueFamilies;
-
 			VkSurfaceKHR m_surface;
 
 			VkSwapchainKHR m_swapChain;
@@ -116,15 +78,10 @@ namespace Singularity
 			VkSemaphore m_imageAvailableSemaphore;
 			VkSemaphore m_renderFinishedSemaphore;
 
+			Device m_device;
+			Validation m_validation;
+
 			Window::Window& m_window;
-
-			std::vector<const char*> const m_validationLayers = {
-				"VK_LAYER_KHRONOS_validation"
-			};
-
-			std::vector<const char*> const m_deviceExtensions = {
-				VK_KHR_SWAPCHAIN_EXTENSION_NAME
-			};
 
 		};
 
