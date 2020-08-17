@@ -156,11 +156,13 @@
   <ItemGroup>
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="SwapChain.cpp" />
     <ClCompile Include="Validation.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Device.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="SwapChain.h" />
     <ClInclude Include="Validation.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

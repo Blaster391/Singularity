@@ -21,6 +21,7 @@ namespace Singularity
 			: 
 			m_device(*this),
 			m_validation(*this),
+			m_swapChain(*this),
 			m_window(_window)
 		{
 			Initialize();
@@ -36,7 +37,7 @@ namespace Singularity
 		void Renderer::Update(float _timeStep)
 		{
 			uint32_t imageIndex;
-			vkAcquireNextImageKHR(m_device.GetLogicalDevice(), m_swapChain, UINT64_MAX, m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+			vkAcquireNextImageKHR(m_device.GetLogicalDevice(), m_swapChain.GetSwapChain(), UINT64_MAX, m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
 			VkSubmitInfo submitInfo{};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -62,7 +63,7 @@ namespace Singularity
 			presentInfo.waitSemaphoreCount = 1;
 			presentInfo.pWaitSemaphores = signalSemaphores;
 
-			VkSwapchainKHR swapChains[] = { m_swapChain };
+			VkSwapchainKHR swapChains[] = { m_swapChain.GetSwapChain() };
 			presentInfo.swapchainCount = 1;
 			presentInfo.pSwapchains = swapChains;
 			presentInfo.pImageIndices = &imageIndex;
@@ -84,9 +85,8 @@ namespace Singularity
 			CreateSurface();
 			
 			m_device.Initialize();
+			m_swapChain.Initialize();
 
-			CreateSwapChain();
-			CreateImageViews();
 			CreateRenderPass();
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
@@ -113,11 +113,8 @@ namespace Singularity
 			vkDestroyPipelineLayout(m_device.GetLogicalDevice(), m_pipelineLayout, nullptr);
 			vkDestroyRenderPass(m_device.GetLogicalDevice(), m_renderPass, nullptr);
 
-			for (auto imageView : m_swapChainImageViews) {
-				vkDestroyImageView(m_device.GetLogicalDevice(), imageView, nullptr);
-			}
 
-			vkDestroySwapchainKHR(m_device.GetLogicalDevice(), m_swapChain, nullptr);
+			m_swapChain.Shutdown();
 
 			m_device.Shutdown();
 
@@ -140,130 +137,6 @@ namespace Singularity
 
 			if (vkCreateWin32SurfaceKHR(m_instance, &createInfo, nullptr, &m_surface) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create window surface!");
-			}
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateSwapChain()
-		{
-			SwapChainSupportDetails const swapChainSupport = m_device.GetSwapChainSupportDetails();
-			m_swapChainExtent = SelectSwapExtent(swapChainSupport);
-
-			VkSurfaceFormatKHR surfaceFormat = SelectSwapSurfaceFormat(swapChainSupport);
-			VkPresentModeKHR presentMode = SelectSwapPresentMode(swapChainSupport);
-
-			uint32 imageCount = swapChainSupport.m_capabilities.minImageCount + 1;
-			if ((swapChainSupport.m_capabilities.maxImageCount > 0) && (imageCount > swapChainSupport.m_capabilities.maxImageCount)) {
-				imageCount = swapChainSupport.m_capabilities.maxImageCount;
-			}
-
-			VkSwapchainCreateInfoKHR createInfo{};
-			createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-			createInfo.surface = m_surface;
-			createInfo.minImageCount = imageCount;
-			createInfo.imageFormat = surfaceFormat.format;
-			createInfo.imageColorSpace = surfaceFormat.colorSpace;
-			createInfo.imageExtent = m_swapChainExtent;
-			createInfo.imageArrayLayers = 1;
-			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-			QueueFamilies const& queueFamilies = m_device.GetQueueFamilies();
-			uint32 queueFamilyIndices[] = { queueFamilies.m_graphicsFamily.value(), queueFamilies.m_presentFamily.value() };
-
-			if (queueFamilies.m_graphicsFamily != queueFamilies.m_presentFamily) {
-				createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-				createInfo.queueFamilyIndexCount = 2;
-				createInfo.pQueueFamilyIndices = queueFamilyIndices;
-			}
-			else {
-				createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-				createInfo.queueFamilyIndexCount = 0; // Optional
-				createInfo.pQueueFamilyIndices = nullptr; // Optional
-			}
-
-			createInfo.preTransform = swapChainSupport.m_capabilities.currentTransform;
-			createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-			createInfo.presentMode = presentMode;
-			createInfo.clipped = VK_TRUE;
-
-			createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-			if (vkCreateSwapchainKHR(m_device.GetLogicalDevice(), &createInfo, nullptr, &m_swapChain) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create swap chain!");
-			}
-
-			vkGetSwapchainImagesKHR(m_device.GetLogicalDevice(), m_swapChain, &imageCount, nullptr);
-			m_swapChainImages.resize(imageCount);
-			vkGetSwapchainImagesKHR(m_device.GetLogicalDevice(), m_swapChain, &imageCount, m_swapChainImages.data());
-
-			m_swapChainImageFormat = surfaceFormat.format;
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		VkSurfaceFormatKHR Renderer::SelectSwapSurfaceFormat(SwapChainSupportDetails const& _swapChainSupport) const
-		{
-			for (const auto& availableFormat : _swapChainSupport.m_formats) {
-				if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-					return availableFormat;
-				}
-			}
-
-			return _swapChainSupport.m_formats[0];
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		VkPresentModeKHR Renderer::SelectSwapPresentMode(SwapChainSupportDetails const& _swapChainSupport) const
-		{
-			for (const auto& availablePresentMode : _swapChainSupport.m_presentModes) {
-				if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-					return availablePresentMode;
-				}
-			}
-
-			return VK_PRESENT_MODE_FIFO_KHR;
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		VkExtent2D Renderer::SelectSwapExtent(SwapChainSupportDetails const& _swapChainSupport) const
-		{
-			if (_swapChainSupport.m_capabilities.currentExtent.width != UINT32_MAX) {
-				return _swapChainSupport.m_capabilities.currentExtent;
-			}
-			else {
-				VkExtent2D actualExtent = { m_window.GetWidth(), m_window.GetHeight() };
-				actualExtent.width = std::max(_swapChainSupport.m_capabilities.minImageExtent.width, std::min(_swapChainSupport.m_capabilities.maxImageExtent.width, actualExtent.width));
-				actualExtent.height = std::max(_swapChainSupport.m_capabilities.minImageExtent.height, std::min(_swapChainSupport.m_capabilities.maxImageExtent.height, actualExtent.height));
-				return actualExtent;
-			}
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateImageViews()
-		{
-			m_swapChainImageViews.resize(m_swapChainImages.size());
-			for (size_t i = 0; i < m_swapChainImages.size(); i++) {
-				VkImageViewCreateInfo createInfo{};
-				createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-				createInfo.image = m_swapChainImages[i];
-
-				createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-				createInfo.format = m_swapChainImageFormat;
-
-				createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-				createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				createInfo.subresourceRange.baseMipLevel = 0;
-				createInfo.subresourceRange.levelCount = 1;
-				createInfo.subresourceRange.baseArrayLayer = 0;
-				createInfo.subresourceRange.layerCount = 1;
-
-				if (vkCreateImageView(m_device.GetLogicalDevice(), &createInfo, nullptr, &m_swapChainImageViews[i]) != VK_SUCCESS) {
-					throw std::runtime_error("failed to create image views!");
-				}
 			}
 		}
 
@@ -302,14 +175,15 @@ namespace Singularity
 			VkViewport viewport{};
 			viewport.x = 0.0f;
 			viewport.y = 0.0f;
-			viewport.width = (float)m_swapChainExtent.width;
-			viewport.height = (float)m_swapChainExtent.height;
+			VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
+			viewport.width = (float)swapChainExtent.width;
+			viewport.height = (float)swapChainExtent.height;
 			viewport.minDepth = 0.0f;
 			viewport.maxDepth = 1.0f;
 
 			VkRect2D scissor{};
 			scissor.offset = { 0, 0 };
-			scissor.extent = m_swapChainExtent;
+			scissor.extent = swapChainExtent;
 
 			VkPipelineViewportStateCreateInfo viewportState{};
 			viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -420,7 +294,7 @@ namespace Singularity
 		void Renderer::CreateRenderPass()
 		{
 			VkAttachmentDescription colorAttachment{};
-			colorAttachment.format = m_swapChainImageFormat;
+			colorAttachment.format = m_swapChain.GetFormat();
 			colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 			colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -465,11 +339,12 @@ namespace Singularity
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateFramebuffers()
 		{
-			m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
+			auto const& imageViews = m_swapChain.GetImageViews();
+			m_swapChainFramebuffers.resize(imageViews.size());
 
-			for (size_t i = 0; i < m_swapChainImageViews.size(); i++) {
+			for (size_t i = 0; i < imageViews.size(); i++) {
 				VkImageView attachments[] = {
-					m_swapChainImageViews[i]
+					imageViews[i]
 				};
 
 				VkFramebufferCreateInfo framebufferInfo{};
@@ -477,8 +352,9 @@ namespace Singularity
 				framebufferInfo.renderPass = m_renderPass;
 				framebufferInfo.attachmentCount = 1;
 				framebufferInfo.pAttachments = attachments;
-				framebufferInfo.width = m_swapChainExtent.width;
-				framebufferInfo.height = m_swapChainExtent.height;
+				VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
+				framebufferInfo.width = swapChainExtent.width;
+				framebufferInfo.height = swapChainExtent.height;
 				framebufferInfo.layers = 1;
 
 				if (vkCreateFramebuffer(m_device.GetLogicalDevice(), &framebufferInfo, nullptr, &m_swapChainFramebuffers[i]) != VK_SUCCESS) {
@@ -530,7 +406,7 @@ namespace Singularity
 				renderPassInfo.renderPass = m_renderPass;
 				renderPassInfo.framebuffer = m_swapChainFramebuffers[i];
 				renderPassInfo.renderArea.offset = { 0, 0 };
-				renderPassInfo.renderArea.extent = m_swapChainExtent;
+				renderPassInfo.renderArea.extent = m_swapChain.GetExtent();
 
 				VkClearValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 				renderPassInfo.clearValueCount = 1;

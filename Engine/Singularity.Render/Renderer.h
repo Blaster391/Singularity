@@ -4,6 +4,7 @@
 
 #include <Singularity.Core/CoreDeclare.h>
 #include <Singularity.Render/Device.h>
+#include <Singularity.Render/SwapChain.h>
 #include <Singularity.Render/Validation.h>
 
 namespace Singularity
@@ -28,6 +29,7 @@ namespace Singularity
 
 			Device const& GetDevice() const { return m_device; }
 			Validation const& GetValidation() const { return m_validation; }
+			Window::Window const& GetWindow() const { return m_window; }
 
 		private:
 			void Initialize();
@@ -38,13 +40,6 @@ namespace Singularity
 			std::vector<const char*> GetRequiredExtensions() const;
 
 			void CreateSurface();
-
-			void CreateSwapChain(); // TODO - SWAPCHAIN.h
-			VkSurfaceFormatKHR SelectSwapSurfaceFormat(SwapChainSupportDetails const& _swapChainSupport) const;
-			VkPresentModeKHR SelectSwapPresentMode(SwapChainSupportDetails const& _swapChainSupport) const;
-			VkExtent2D SelectSwapExtent(SwapChainSupportDetails const& _swapChainSupport) const;
-
-			void CreateImageViews();
 
 			void CreateGraphicsPipeline(); // TODO - PIPELINE.h
 			VkShaderModule CreateShaderModule(std::string _filePath); // TODO - SHADER.h
@@ -61,11 +56,6 @@ namespace Singularity
 			VkInstance m_instance;
 			VkSurfaceKHR m_surface;
 
-			VkSwapchainKHR m_swapChain;
-			std::vector<VkImage> m_swapChainImages;
-			VkFormat m_swapChainImageFormat;
-			VkExtent2D m_swapChainExtent;
-			std::vector<VkImageView> m_swapChainImageViews;
 			std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
 			VkRenderPass m_renderPass;
@@ -80,6 +70,7 @@ namespace Singularity
 
 			Device m_device;
 			Validation m_validation;
+			SwapChain m_swapChain;
 
 			Window::Window& m_window;
 
