@@ -6,7 +6,7 @@ namespace Singularity
 	namespace Render
 	{
 		class Renderer;
-		class SwapChainSupportDetails;
+		struct SwapChainSupportDetails;
 
 		class SwapChain
 		{

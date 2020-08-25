@@ -9,16 +9,19 @@ namespace Singularity
 {
 	namespace Window
 	{
+		//////////////////////////////////////////////////////////////////////////////////////
 		Window::Window()
 		{
 			Initialize();
 		}
 
+		//////////////////////////////////////////////////////////////////////////////////////
 		Window::~Window()
 		{
 			Shutdown();
 		}
 
+		//////////////////////////////////////////////////////////////////////////////////////
 		void Window::Update(float _timeStep)
 		{
 			if (!m_active)
@@ -36,6 +39,7 @@ namespace Singularity
 			}
 		}
 
+		//////////////////////////////////////////////////////////////////////////////////////
 		WindowExtensionsInfo Window::GetExtensions() const
 		{
 			WindowExtensionsInfo extensions;
@@ -43,19 +47,37 @@ namespace Singularity
 			return extensions;
 		}
 
+		//////////////////////////////////////////////////////////////////////////////////////
 		HWND Window::GetHandle() const
 		{
 			return glfwGetWin32Window(m_window);
 		}
 
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Window::SetSize(uint32 _width, uint32 _height)
+		{
+			m_width = _width;
+			m_height = _height;
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		static void ResizeCallback(GLFWwindow* _window, int _width, int _height)
+		{
+			Window* window = (Window*)glfwGetWindowUserPointer(_window);
+			window->SetSize(_width, _height);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
 		void Window::Initialize()
 		{
 			glfwInit();
 
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+			glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 			m_window = glfwCreateWindow(m_width, m_height, m_title, nullptr, nullptr);
+			glfwSetWindowUserPointer(m_window, this);
+			glfwSetFramebufferSizeCallback(m_window, ResizeCallback);
 
 			m_active = true;
 		}

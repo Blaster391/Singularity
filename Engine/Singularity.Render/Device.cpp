@@ -34,6 +34,12 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
+		void Device::RecalculateSwapChainSupportDetails()
+		{
+			m_swapChainSupportDetails = FindSwapChainSupport(m_physicalDevice);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
 		void Device::SelectPhysicalDevice()
 		{
 			uint32 deviceCount = 0;
@@ -59,7 +65,7 @@ namespace Singularity
 			}
 
 			m_deviceQueueFamilies = FindQueueFamilies(m_physicalDevice);
-			m_swapChainSupportDetails = FindSwapChainSupport(m_physicalDevice);
+			RecalculateSwapChainSupportDetails();
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////

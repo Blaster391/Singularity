@@ -40,9 +40,10 @@ namespace Singularity
 
 			VkDevice GetLogicalDevice() const { return m_logicalDevice; }
 			VkPhysicalDevice GetPhysicalDevice() const { return m_physicalDevice; }
-
-			QueueFamilies const& GetQueueFamilies() const { return m_deviceQueueFamilies; }
+			
+			QueueFamilies const& GetQueueFamilies() const { return m_deviceQueueFamilies; } 
 			SwapChainSupportDetails const& GetSwapChainSupportDetails() const { return m_swapChainSupportDetails; }
+			void RecalculateSwapChainSupportDetails();
 
 			VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
 			VkQueue GetPresentQueue() const { return m_presentQueue; }

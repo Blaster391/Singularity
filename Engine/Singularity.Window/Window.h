@@ -32,6 +32,7 @@ namespace Singularity
 
 			WindowExtensionsInfo GetExtensions() const;
 			HWND GetHandle() const;
+			void SetSize(uint32 _width, uint32 _height);
 
 		private:
 			void Initialize();

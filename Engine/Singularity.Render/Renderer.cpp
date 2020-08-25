@@ -37,7 +37,15 @@ namespace Singularity
 		void Renderer::Update(float _timeStep)
 		{
 			uint32_t imageIndex;
-			vkAcquireNextImageKHR(m_device.GetLogicalDevice(), m_swapChain.GetSwapChain(), UINT64_MAX, m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+			VkResult const result = vkAcquireNextImageKHR(m_device.GetLogicalDevice(), m_swapChain.GetSwapChain(), UINT64_MAX, m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+			if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+				RebuildSwapChain();
+				return;
+			}
+			else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+				throw std::runtime_error("failed to acquire swap chain image!");
+			}
 
 			VkSubmitInfo submitInfo{};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -75,6 +83,22 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::RebuildSwapChain()
+		{
+			vkQueueWaitIdle(m_device.GetPresentQueue());
+
+			// Cleanup old swapchain
+			DestroyPipeline();
+			m_swapChain.Shutdown();
+
+			// Init new swapchain
+			m_device.RecalculateSwapChainSupportDetails();
+			m_swapChain.Initialize();
+			CreatePipeline();
+
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::Initialize()
 		{
 			CreateInstance();
@@ -87,32 +111,13 @@ namespace Singularity
 			m_device.Initialize();
 			m_swapChain.Initialize();
 
-			CreateRenderPass();
-			CreateGraphicsPipeline();
-			CreateFramebuffers();
-			CreateCommandPool();
-			CreateCommandBuffers();
-			CreateSemaphores();
+			CreatePipeline();
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::Shutdown()
 		{
-			vkDeviceWaitIdle(m_device.GetLogicalDevice());
-
-			vkDestroySemaphore(m_device.GetLogicalDevice(), m_renderFinishedSemaphore, nullptr);
-			vkDestroySemaphore(m_device.GetLogicalDevice(), m_imageAvailableSemaphore, nullptr);
-
-			vkDestroyCommandPool(m_device.GetLogicalDevice(), m_commandPool, nullptr);
-
-			for (auto framebuffer : m_swapChainFramebuffers) {
-				vkDestroyFramebuffer(m_device.GetLogicalDevice(), framebuffer, nullptr);
-			}
-
-			vkDestroyPipeline(m_device.GetLogicalDevice(), m_graphicsPipeline, nullptr);
-			vkDestroyPipelineLayout(m_device.GetLogicalDevice(), m_pipelineLayout, nullptr);
-			vkDestroyRenderPass(m_device.GetLogicalDevice(), m_renderPass, nullptr);
-
+			DestroyPipeline();
 
 			m_swapChain.Shutdown();
 
@@ -125,7 +130,33 @@ namespace Singularity
 			vkDestroyInstance(m_instance, nullptr);
 		}
 
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreatePipeline()
+		{
+			CreateRenderPass();
+			CreateGraphicsPipeline();
+			CreateFramebuffers();
+			CreateCommandPool();
+			CreateCommandBuffers();
+			CreateSemaphores();
+		}
 
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::DestroyPipeline()
+		{
+			vkDestroySemaphore(m_device.GetLogicalDevice(), m_renderFinishedSemaphore, nullptr);
+			vkDestroySemaphore(m_device.GetLogicalDevice(), m_imageAvailableSemaphore, nullptr);
+
+			vkDestroyCommandPool(m_device.GetLogicalDevice(), m_commandPool, nullptr);
+
+			for (auto framebuffer : m_swapChainFramebuffers) {
+				vkDestroyFramebuffer(m_device.GetLogicalDevice(), framebuffer, nullptr);
+			}
+
+			vkDestroyPipeline(m_device.GetLogicalDevice(), m_graphicsPipeline, nullptr);
+			vkDestroyPipelineLayout(m_device.GetLogicalDevice(), m_pipelineLayout, nullptr);
+			vkDestroyRenderPass(m_device.GetLogicalDevice(), m_renderPass, nullptr);
+		}
 	
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateSurface()

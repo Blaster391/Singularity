@@ -31,9 +31,14 @@ namespace Singularity
 			Validation const& GetValidation() const { return m_validation; }
 			Window::Window const& GetWindow() const { return m_window; }
 
+			void RebuildSwapChain();
+
 		private:
 			void Initialize();
 			void Shutdown();
+
+			void CreatePipeline();// Can't think of better name (Framebuffers + Pipeline)
+			void DestroyPipeline();
 
 			void CreateInstance();
 			void CheckExtensions();
