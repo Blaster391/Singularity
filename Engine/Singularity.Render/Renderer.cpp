@@ -9,6 +9,7 @@
 
 // Engine Includes
 #include <Singularity.IO/IO.h>
+#include <Singularity.Render/Mesh.h>
 #include <Singularity.Window/Window.h>
 
 namespace Singularity
@@ -121,6 +122,8 @@ namespace Singularity
 
 			m_swapChain.Shutdown();
 
+			vkDestroyBuffer(m_device.GetLogicalDevice(), m_vertexBuffer, nullptr);
+
 			m_device.Shutdown();
 
 			m_validation.Shutdown();
@@ -136,6 +139,7 @@ namespace Singularity
 			CreateRenderPass();
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
+			CreateVertexBuffer();
 			CreateCommandPool();
 			CreateCommandBuffers();
 			CreateSemaphores();
@@ -392,6 +396,35 @@ namespace Singularity
 					throw std::runtime_error("failed to create framebuffer!");
 				}
 			}
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateVertexBuffer()
+		{
+			std::vector<Vertex> vertices;
+
+			// Triangle one
+			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.0f }));
+			vertices.push_back(Vertex({ 0.0f, -0.5f, 0.0f }));
+			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.0f }));
+
+			// Triangle two
+			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.0f }));
+			vertices.push_back(Vertex({ 0.0f, -0.5f, 0.0f }));
+			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.0f }));
+
+			Mesh diamond(vertices);
+
+			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = sizeof(Vertex) * diamond.GetVertexCount();
+			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			if (vkCreateBuffer(m_device.GetLogicalDevice(), &bufferInfo, nullptr, &m_vertexBuffer) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create vertex buffer!");
+			}
+
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////

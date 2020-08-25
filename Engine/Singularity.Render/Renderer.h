@@ -53,6 +53,8 @@ namespace Singularity
 
 			void CreateFramebuffers();
 
+			void CreateVertexBuffer();
+
 			void CreateCommandPool();
 			void CreateCommandBuffers();
 
@@ -66,6 +68,8 @@ namespace Singularity
 			VkRenderPass m_renderPass;
 			VkPipeline m_graphicsPipeline;
 			VkPipelineLayout m_pipelineLayout;
+
+			VkBuffer m_vertexBuffer;
 
 			VkCommandPool m_commandPool;
 			std::vector<VkCommandBuffer> m_commandBuffers;
