@@ -48,6 +48,8 @@ namespace Singularity
 			VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
 			VkQueue GetPresentQueue() const { return m_presentQueue; }
 
+			uint32 FindMemoryType(uint32_t m_typeFilter, VkMemoryPropertyFlags m_properties);
+
 		private:
 			void SelectPhysicalDevice();
 			void CreateLogicalDevice();

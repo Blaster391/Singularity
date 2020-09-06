@@ -70,6 +70,7 @@ namespace Singularity
 			VkPipelineLayout m_pipelineLayout;
 
 			VkBuffer m_vertexBuffer;
+			VkDeviceMemory m_vertexBufferMemory;
 
 			VkCommandPool m_commandPool;
 			std::vector<VkCommandBuffer> m_commandBuffers;

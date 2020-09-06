@@ -16,5 +16,8 @@
       <Filter>Vertex</Filter>
     </None>
     <None Include="compile.bat" />
+    <None Include="Vertex\basic.vert">
+      <Filter>Vertex</Filter>
+    </None>
   </ItemGroup>
 </Project>

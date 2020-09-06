@@ -40,6 +40,20 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
+		uint32 Device::FindMemoryType(uint32 m_typeFilter, VkMemoryPropertyFlags m_properties)
+		{
+			VkPhysicalDeviceMemoryProperties memProperties;
+			vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
+			for (uint32 i = 0; i < memProperties.memoryTypeCount; i++) {
+				if ((m_typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & m_properties) == m_properties) {
+					return i;
+				}
+			}
+			throw std::runtime_error("failed to find suitable memory type!");
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
 		void Device::SelectPhysicalDevice()
 		{
 			uint32 deviceCount = 0;
