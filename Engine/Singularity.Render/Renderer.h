@@ -4,6 +4,7 @@
 
 #include <Singularity.Core/CoreDeclare.h>
 #include <Singularity.Render/Device.h>
+#include <Singularity.Render/GenericUniformBufferObject.h>
 #include <Singularity.Render/SwapChain.h>
 #include <Singularity.Render/Validation.h>
 
@@ -37,6 +38,9 @@ namespace Singularity
 			void Initialize();
 			void Shutdown();
 
+			void UpdateUniformBuffers(uint32 _imageIndex);
+
+			void CreateDescriptorSetLayout();
 			void CreatePipeline();// Can't think of better name (Framebuffers + Pipeline)
 			void DestroyPipeline();
 
@@ -54,23 +58,35 @@ namespace Singularity
 			void CreateFramebuffers();
 
 			void CreateVertexBuffer();
+			void CreateUniformBuffers();
+			void CreateDescriptorPool();
+			void CreateDescriptorSets();
 
 			void CreateCommandPool();
 			void CreateCommandBuffers();
 
 			void CreateSemaphores();
 
+			void CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory); // TODO Hide buffers in their own class????
+
 			VkInstance m_instance;
 			VkSurfaceKHR m_surface;
 
 			std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
+			VkDescriptorSetLayout m_descriptorSetLayout;
+			VkDescriptorPool m_descriptorPool;
+			std::vector<VkDescriptorSet> m_descriptorSets;
+
 			VkRenderPass m_renderPass;
 			VkPipeline m_graphicsPipeline;
 			VkPipelineLayout m_pipelineLayout;
 
-			VkBuffer m_vertexBuffer;
-			VkDeviceMemory m_vertexBufferMemory;
+			VkBuffer m_vertexBuffer; // TODO move all these into their own classes, don't rebuild on window resize
+			VkDeviceMemory m_vertexBufferMemory; // TODO index buffers
+
+			std::vector<VkBuffer> m_uniformBuffers;
+			std::vector<VkDeviceMemory> m_uniformBuffersMemory;
 
 			VkCommandPool m_commandPool;
 			std::vector<VkCommandBuffer> m_commandBuffers;

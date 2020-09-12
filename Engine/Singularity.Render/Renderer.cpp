@@ -1,6 +1,10 @@
 #include "Renderer.h"
 
 // External Includes
+#define GLM_FORCE_RADIANS
+#include <chrono>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <set>
 #include <vector>
@@ -37,7 +41,7 @@ namespace Singularity
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::Update(float _timeStep)
 		{
-			uint32_t imageIndex;
+			uint32 imageIndex;
 			VkResult const result = vkAcquireNextImageKHR(m_device.GetLogicalDevice(), m_swapChain.GetSwapChain(), UINT64_MAX, m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
 			if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -47,6 +51,8 @@ namespace Singularity
 			else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 				throw std::runtime_error("failed to acquire swap chain image!");
 			}
+
+			UpdateUniformBuffers(imageIndex);
 
 			VkSubmitInfo submitInfo{};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -112,6 +118,7 @@ namespace Singularity
 			m_device.Initialize();
 			m_swapChain.Initialize();
 
+			CreateDescriptorSetLayout();
 			CreatePipeline();
 		}
 
@@ -120,10 +127,9 @@ namespace Singularity
 		{
 			DestroyPipeline();
 
-			m_swapChain.Shutdown();
+			vkDestroyDescriptorSetLayout(m_device.GetLogicalDevice(), m_descriptorSetLayout, nullptr);
 
-			vkDestroyBuffer(m_device.GetLogicalDevice(), m_vertexBuffer, nullptr);
-			vkFreeMemory(m_device.GetLogicalDevice(), m_vertexBufferMemory, nullptr);
+			m_swapChain.Shutdown();
 
 			m_device.Shutdown();
 
@@ -135,12 +141,59 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::UpdateUniformBuffers(uint32 _imageIndex)
+		{
+			static auto startTime = std::chrono::high_resolution_clock::now();
+
+			auto currentTime = std::chrono::high_resolution_clock::now();
+			float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+			GenericUniformBufferObject ubo{};
+			ubo.m_model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+			ubo.m_view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+			VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
+			ubo.m_projection = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+
+			ubo.m_projection[1][1] *= -1;
+
+			void* data;
+			vkMapMemory(m_device.GetLogicalDevice(), m_uniformBuffersMemory[_imageIndex], 0, sizeof(ubo), 0, &data);
+			memcpy(data, &ubo, sizeof(ubo));
+			vkUnmapMemory(m_device.GetLogicalDevice(), m_uniformBuffersMemory[_imageIndex]);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateDescriptorSetLayout()
+		{
+			VkDescriptorSetLayoutBinding uboLayoutBinding{};
+			uboLayoutBinding.binding = 0;
+			uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			uboLayoutBinding.descriptorCount = 1;
+			uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+			uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+			VkDescriptorSetLayoutCreateInfo layoutInfo{};
+			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			layoutInfo.bindingCount = 1;
+			layoutInfo.pBindings = &uboLayoutBinding;
+
+			if (vkCreateDescriptorSetLayout(m_device.GetLogicalDevice(), &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create descriptor set layout!");
+			}
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreatePipeline()
 		{
 			CreateRenderPass();
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
 			CreateVertexBuffer();
+			CreateUniformBuffers();
+			CreateDescriptorPool();
+			CreateDescriptorSets();
 			CreateCommandPool();
 			CreateCommandBuffers();
 			CreateSemaphores();
@@ -149,18 +202,29 @@ namespace Singularity
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::DestroyPipeline()
 		{
-			vkDestroySemaphore(m_device.GetLogicalDevice(), m_renderFinishedSemaphore, nullptr);
-			vkDestroySemaphore(m_device.GetLogicalDevice(), m_imageAvailableSemaphore, nullptr);
+			VkDevice const logicalDevice = m_device.GetLogicalDevice();
+			vkDestroySemaphore(logicalDevice, m_renderFinishedSemaphore, nullptr);
+			vkDestroySemaphore(logicalDevice, m_imageAvailableSemaphore, nullptr);
 
-			vkDestroyCommandPool(m_device.GetLogicalDevice(), m_commandPool, nullptr);
+			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
 
-			for (auto framebuffer : m_swapChainFramebuffers) {
-				vkDestroyFramebuffer(m_device.GetLogicalDevice(), framebuffer, nullptr);
+			vkDestroyBuffer(logicalDevice, m_vertexBuffer, nullptr);
+			vkFreeMemory(logicalDevice, m_vertexBufferMemory, nullptr);
+
+			vkDestroyDescriptorPool(logicalDevice, m_descriptorPool, nullptr);
+
+			for (size_t i = 0; i < m_swapChain.GetImageViews().size(); i++) {
+				vkDestroyBuffer(logicalDevice, m_uniformBuffers[i], nullptr);
+				vkFreeMemory(logicalDevice, m_uniformBuffersMemory[i], nullptr);
 			}
 
-			vkDestroyPipeline(m_device.GetLogicalDevice(), m_graphicsPipeline, nullptr);
-			vkDestroyPipelineLayout(m_device.GetLogicalDevice(), m_pipelineLayout, nullptr);
-			vkDestroyRenderPass(m_device.GetLogicalDevice(), m_renderPass, nullptr);
+			for (auto framebuffer : m_swapChainFramebuffers) {
+				vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
+			}
+
+			vkDestroyPipeline(logicalDevice, m_graphicsPipeline, nullptr);
+			vkDestroyPipelineLayout(logicalDevice, m_pipelineLayout, nullptr);
+			vkDestroyRenderPass(logicalDevice, m_renderPass, nullptr);
 		}
 	
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +302,7 @@ namespace Singularity
 			rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 			rasterizer.lineWidth = 1.0f;
 			rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-			rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+			rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 			rasterizer.depthBiasEnable = VK_FALSE;
 			rasterizer.depthBiasConstantFactor = 0.0f;
 			rasterizer.depthBiasClamp = 0.0f;
@@ -276,8 +340,8 @@ namespace Singularity
 
 			VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 			pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			pipelineLayoutInfo.setLayoutCount = 0;
-			pipelineLayoutInfo.pSetLayouts = nullptr;
+			pipelineLayoutInfo.setLayoutCount = 1;
+			pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
 			pipelineLayoutInfo.pushConstantRangeCount = 0;
 			pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -426,29 +490,90 @@ namespace Singularity
 			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+			CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_vertexBuffer, m_vertexBufferMemory);
+
 			VkDevice const logicalDevice = m_device.GetLogicalDevice();
-			if (vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &m_vertexBuffer) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create vertex buffer!");
-			}
-
-			VkMemoryRequirements memRequirements;
-			vkGetBufferMemoryRequirements(logicalDevice, m_vertexBuffer, &memRequirements);
-
-			VkMemoryAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			allocInfo.allocationSize = memRequirements.size;
-			allocInfo.memoryTypeIndex = m_device.FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-			if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &m_vertexBufferMemory) != VK_SUCCESS) { // TODO move inside Mesh
-				throw std::runtime_error("failed to allocate vertex buffer memory!");
-			}
-
-			vkBindBufferMemory(logicalDevice, m_vertexBuffer, m_vertexBufferMemory, 0);
-
 			void* data;
 			vkMapMemory(logicalDevice, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data);
 			memcpy(data, vertices.data(), (size_t)bufferInfo.size);
 			vkUnmapMemory(logicalDevice, m_vertexBufferMemory);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateUniformBuffers()
+		{
+			size_t const imageViewCount = m_swapChain.GetImageViews().size();
+			m_uniformBuffers.resize(imageViewCount);
+			m_uniformBuffersMemory.resize(imageViewCount);
+
+			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = sizeof(GenericUniformBufferObject);
+			bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			for (size_t i = 0; i < imageViewCount; i++) {
+				CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffers[i], m_uniformBuffersMemory[i]);
+			}
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateDescriptorPool()
+		{
+			VkDescriptorPoolSize poolSize{};
+			poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			uint32 const descriptorCount = static_cast<uint32>(m_swapChain.GetImageViews().size());
+			poolSize.descriptorCount = descriptorCount;
+
+			VkDescriptorPoolCreateInfo poolInfo{};
+			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			poolInfo.poolSizeCount = 1;
+			poolInfo.pPoolSizes = &poolSize;
+			poolInfo.maxSets = static_cast<uint32_t>(descriptorCount);
+
+			VkDevice const logicalDevice = m_device.GetLogicalDevice();
+			if (vkCreateDescriptorPool(logicalDevice, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create descriptor pool!");
+			}
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateDescriptorSets()
+		{
+			uint32 const descriptorCount = static_cast<uint32>(m_swapChain.GetImageViews().size());
+			std::vector<VkDescriptorSetLayout> layouts(descriptorCount, m_descriptorSetLayout);
+			VkDescriptorSetAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = m_descriptorPool;
+			allocInfo.descriptorSetCount = descriptorCount;
+			allocInfo.pSetLayouts = layouts.data();
+
+			m_descriptorSets.resize(descriptorCount);
+			VkDevice const logicalDevice = m_device.GetLogicalDevice();
+			if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, m_descriptorSets.data()) != VK_SUCCESS) {
+				throw std::runtime_error("failed to allocate descriptor sets!");
+			}
+
+			for (size_t i = 0; i < descriptorCount; i++) {
+				VkDescriptorBufferInfo bufferInfo{};
+				bufferInfo.buffer = m_uniformBuffers[i];
+				bufferInfo.offset = 0;
+				bufferInfo.range = sizeof(GenericUniformBufferObject);
+
+				VkWriteDescriptorSet descriptorWrite{};
+				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite.dstSet = m_descriptorSets[i];
+				descriptorWrite.dstBinding = 0;
+				descriptorWrite.dstArrayElement = 0;
+				descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrite.descriptorCount = 1;
+				descriptorWrite.pBufferInfo = &bufferInfo;
+				descriptorWrite.pImageInfo = nullptr; // Optional
+				descriptorWrite.pTexelBufferView = nullptr; // Optional
+
+				vkUpdateDescriptorSets(logicalDevice, 1, &descriptorWrite, 0, nullptr);
+
+			}
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -507,7 +632,7 @@ namespace Singularity
 				VkBuffer vertexBuffers[] = { m_vertexBuffer }; // TODO link to mesh
 				VkDeviceSize offsets[] = { 0 };
 				vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
-
+				vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
 				vkCmdDraw(m_commandBuffers[i], static_cast<uint32_t>(6), 1, 0, 0); // TODO link to mesh
 
 				vkCmdEndRenderPass(m_commandBuffers[i]);
@@ -529,6 +654,29 @@ namespace Singularity
 
 				throw std::runtime_error("failed to create semaphores!");
 			}
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory)
+		{
+			VkDevice const logicalDevice = m_device.GetLogicalDevice();
+			if (vkCreateBuffer(logicalDevice, &_createInfo, nullptr, &o_buffer) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create buffer!");
+			}
+
+			VkMemoryRequirements memRequirements;
+			vkGetBufferMemoryRequirements(logicalDevice, o_buffer, &memRequirements);
+
+			VkMemoryAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = m_device.FindMemoryType(memRequirements.memoryTypeBits, _properties);
+
+			if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &o_bufferMemory) != VK_SUCCESS) {
+				throw std::runtime_error("failed to allocate buffer memory!");
+			}
+
+			vkBindBufferMemory(logicalDevice, o_buffer, o_bufferMemory, 0);
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////

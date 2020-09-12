@@ -155,6 +155,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Device.cpp" />
+    <ClCompile Include="GenericUniformBufferObject.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="SwapChain.cpp" />
@@ -162,6 +163,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Device.h" />
+    <ClInclude Include="GenericUniformBufferObject.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="SwapChain.h" />
