@@ -27,7 +27,7 @@ namespace Singularity
 			VkSurfaceFormatKHR SelectSwapSurfaceFormat(SwapChainSupportDetails const& _swapChainSupport) const;
 			VkPresentModeKHR SelectSwapPresentMode(SwapChainSupportDetails const& _swapChainSupport) const;
 			VkExtent2D SelectSwapExtent(SwapChainSupportDetails const& _swapChainSupport) const;
-			void CreateImageViews();
+			void CreateImageViews(); // TODO link with CreateImageView
 
 			Renderer const& m_renderer;
 

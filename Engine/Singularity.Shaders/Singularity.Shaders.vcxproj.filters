@@ -19,5 +19,11 @@
     <None Include="Vertex\basic.vert">
       <Filter>Vertex</Filter>
     </None>
+    <None Include="Vertex\textured.vert">
+      <Filter>Vertex</Filter>
+    </None>
+    <None Include="Fragment\textured.frag">
+      <Filter>Fragment</Filter>
+    </None>
   </ItemGroup>
 </Project>

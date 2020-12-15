@@ -2,7 +2,7 @@
 set outputDir=%1
 echo %outputDir%
 
-set compiler=D:\Vulkan\1.2.148.1\Bin\glslc.exe
+set compiler=F:\Programs\VulkanSDK\1.2.162.0\Bin\glslc.exe
 echo %compiler%
 
 :: Clean up old shaders

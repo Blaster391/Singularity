@@ -40,13 +40,13 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
-		uint32 Device::FindMemoryType(uint32 m_typeFilter, VkMemoryPropertyFlags m_properties)
+		uint32 Device::FindMemoryType(uint32 _typeFilter, VkMemoryPropertyFlags _properties) const
 		{
 			VkPhysicalDeviceMemoryProperties memProperties;
 			vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
 
 			for (uint32 i = 0; i < memProperties.memoryTypeCount; i++) {
-				if ((m_typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & m_properties) == m_properties) {
+				if ((_typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & _properties) == _properties) {
 					return i;
 				}
 			}
@@ -122,6 +122,11 @@ namespace Singularity
 			vkGetPhysicalDeviceFeatures(_device, &deviceFeatures);
 
 			if (!deviceFeatures.geometryShader)
+			{
+				return false;
+			}
+
+			if (!deviceFeatures.samplerAnisotropy) // TODO remove dependancy make optional
 			{
 				return false;
 			}
@@ -223,6 +228,7 @@ namespace Singularity
 			}
 
 			VkPhysicalDeviceFeatures deviceFeatures{};
+			deviceFeatures.samplerAnisotropy = VK_TRUE;
 
 			VkDeviceCreateInfo createInfo{};
 			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -230,7 +236,7 @@ namespace Singularity
 			createInfo.queueCreateInfoCount = static_cast<uint32>(queueCreateInfos.size());
 			createInfo.pEnabledFeatures = &deviceFeatures;
 
-			createInfo.enabledExtensionCount = static_cast<uint32_t>(m_deviceExtensions.size());
+			createInfo.enabledExtensionCount = static_cast<uint32>(m_deviceExtensions.size());
 			createInfo.ppEnabledExtensionNames = m_deviceExtensions.data();
 
 			if (m_renderer.GetValidation().UseValidationLayers()) {

@@ -164,8 +164,10 @@ call compile.bat $(SolutionDir)Data\Shaders</Command>
   <ItemGroup>
     <None Include="compile.bat" />
     <None Include="Fragment\shader.frag" />
+    <None Include="Fragment\textured.frag" />
     <None Include="Vertex\basic.vert" />
     <None Include="Vertex\shader.vert" />
+    <None Include="Vertex\textured.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

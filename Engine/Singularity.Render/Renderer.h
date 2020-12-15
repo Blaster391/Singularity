@@ -64,10 +64,23 @@ namespace Singularity
 
 			void CreateCommandPool();
 			void CreateCommandBuffers();
+			VkCommandBuffer BeginSingleTimeCommands();
+			void EndSingleTimeCommands(VkCommandBuffer _commandBuffer);
 
 			void CreateSemaphores();
 
+			void CreateTextureImage();
+			void CreateTextureImageView();
+			void CreateTextureSampler();
+
+			void CreateImage(uint32 _width, uint32 _height, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) const;
+			VkImageView CreateImageView(VkImage _image, VkFormat _format);
+			void TransitionImageLayout(VkImage _image, VkFormat _format, VkImageLayout _oldLayout, VkImageLayout _newLayout);
+
 			void CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory); // TODO Hide buffers in their own class????
+			void CopyBuffer(VkBuffer _sourceBuffer, VkBuffer _destBuffer, VkDeviceSize _size);
+			void CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32 _width, uint32 _height);
+
 
 			VkInstance m_instance;
 			VkSurfaceKHR m_surface;
@@ -84,6 +97,12 @@ namespace Singularity
 
 			VkBuffer m_vertexBuffer; // TODO move all these into their own classes, don't rebuild on window resize
 			VkDeviceMemory m_vertexBufferMemory; // TODO index buffers
+
+			VkImage m_textureImage;
+			VkImageView m_textureImageView;
+			VkDeviceMemory m_textureImageMemory;
+			VkSampler m_textureSampler;
+
 
 			std::vector<VkBuffer> m_uniformBuffers;
 			std::vector<VkDeviceMemory> m_uniformBuffersMemory;
