@@ -207,21 +207,21 @@ namespace Singularity
 		{
 			CreateRenderPass();
 			CreateGraphicsPipeline();
-			CreateFramebuffers();
+			
 			CreateVertexBuffer();
 			CreateUniformBuffers();
 			CreateDescriptorPool();
 
 			CreateCommandPool(); // TODO ordering and cleanup and not rebuilding stuff i shouldn't
 
+			CreateDepthResources();
+			CreateFramebuffers();
+
 			CreateTextureImage();
 			CreateTextureImageView();
 			CreateTextureSampler();
 
 			CreateDescriptorSets();
-
-
-
 			
 			CreateCommandBuffers();
 			CreateSemaphores();
@@ -233,6 +233,11 @@ namespace Singularity
 			VkDevice const logicalDevice = m_device.GetLogicalDevice();
 			vkDestroySemaphore(logicalDevice, m_renderFinishedSemaphore, nullptr);
 			vkDestroySemaphore(logicalDevice, m_imageAvailableSemaphore, nullptr);
+
+			vkDestroyImageView(logicalDevice, m_depthImageView, nullptr);
+			vkDestroyImage(logicalDevice, m_depthImage, nullptr);
+			vkFreeMemory(logicalDevice, m_depthImageMemory, nullptr);
+
 
 			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
 
@@ -366,6 +371,18 @@ namespace Singularity
 			colorBlending.blendConstants[2] = 0.0f;
 			colorBlending.blendConstants[3] = 0.0f;
 
+			VkPipelineDepthStencilStateCreateInfo depthStencil{};
+			depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+			depthStencil.depthTestEnable = VK_TRUE;
+			depthStencil.depthWriteEnable = VK_TRUE;
+			depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+			depthStencil.depthBoundsTestEnable = VK_FALSE;
+			depthStencil.minDepthBounds = 0.0f; // Optional
+			depthStencil.maxDepthBounds = 1.0f; // Optional
+			depthStencil.stencilTestEnable = VK_FALSE;
+			depthStencil.front = {}; // Optional
+			depthStencil.back = {}; // Optional
+
 			VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 			pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 			pipelineLayoutInfo.setLayoutCount = 1;
@@ -394,6 +411,7 @@ namespace Singularity
 			pipelineInfo.subpass = 0;
 			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 			pipelineInfo.basePipelineIndex = -1;
+			pipelineInfo.pDepthStencilState = &depthStencil;
 
 			if (vkCreateGraphicsPipelines(m_device.GetLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create graphics pipeline!");
@@ -438,26 +456,41 @@ namespace Singularity
 			colorAttachmentRef.attachment = 0;
 			colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+			VkAttachmentDescription depthAttachment{};
+			depthAttachment.format = FindDepthFormat();
+			depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+			depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+			VkAttachmentReference depthAttachmentRef{};
+			depthAttachmentRef.attachment = 1;
+			depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
 			VkSubpassDescription subpass{};
 			subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 			subpass.colorAttachmentCount = 1;
 			subpass.pColorAttachments = &colorAttachmentRef;
-
-			VkRenderPassCreateInfo renderPassInfo{};
-			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-			renderPassInfo.attachmentCount = 1;
-			renderPassInfo.pAttachments = &colorAttachment;
-			renderPassInfo.subpassCount = 1;
-			renderPassInfo.pSubpasses = &subpass;
-
+			subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
 			VkSubpassDependency dependency{};
 			dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 			dependency.dstSubpass = 0;
-			dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 			dependency.srcAccessMask = 0;
-			dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-			dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+			dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+			std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+			VkRenderPassCreateInfo renderPassInfo{};
+			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+			renderPassInfo.attachmentCount = static_cast<uint32>(attachments.size());
+			renderPassInfo.pAttachments = attachments.data();
+			renderPassInfo.subpassCount = 1;
+			renderPassInfo.pSubpasses = &subpass;
 			renderPassInfo.dependencyCount = 1;
 			renderPassInfo.pDependencies = &dependency;
 
@@ -474,15 +507,16 @@ namespace Singularity
 			m_swapChainFramebuffers.resize(imageViews.size());
 
 			for (size_t i = 0; i < imageViews.size(); i++) {
-				VkImageView attachments[] = {
-					imageViews[i]
+				std::array<VkImageView, 2> attachments = {
+					imageViews[i],
+					m_depthImageView
 				};
 
 				VkFramebufferCreateInfo framebufferInfo{};
 				framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 				framebufferInfo.renderPass = m_renderPass;
-				framebufferInfo.attachmentCount = 1;
-				framebufferInfo.pAttachments = attachments;
+				framebufferInfo.attachmentCount = static_cast<uint32>(attachments.size());
+				framebufferInfo.pAttachments = attachments.data();
 				VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
 				framebufferInfo.width = swapChainExtent.width;
 				framebufferInfo.height = swapChainExtent.height;
@@ -505,10 +539,23 @@ namespace Singularity
 			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
 
 			// Triangle two
-			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
-			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
-			vertices.push_back(Vertex({ 0.0f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }));
-			
+			vertices.push_back(Vertex({ -0.5f, 0.0f, -0.25f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
+			vertices.push_back(Vertex({ 0.5f, 0.0f, -0.25f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
+			vertices.push_back(Vertex({ 0.0f, 0.5f, -0.25f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }));
+
+
+			// Second Quad
+			// Triangle one
+			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.5f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
+			vertices.push_back(Vertex({ 0.0f, -0.5f, 0.5f }, { 1.0f, 0.25f, 0.0f, 1.0f }, { 0.0f, 0.0f }));
+			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.5f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
+
+			// Triangle two
+			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.25f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
+			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.25f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
+			vertices.push_back(Vertex({ 0.0f, 0.5f, 0.25f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }));
+
+
 			Mesh diamond(vertices);
 
 			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
@@ -665,9 +712,12 @@ namespace Singularity
 				renderPassInfo.renderArea.offset = { 0, 0 };
 				renderPassInfo.renderArea.extent = m_swapChain.GetExtent();
 
-				VkClearValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
-				renderPassInfo.clearValueCount = 1;
-				renderPassInfo.pClearValues = &clearColor;
+				std::array<VkClearValue, 2> clearValues{};
+				clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
+				clearValues[1].depthStencil = { 1.0f, 0 };
+
+				renderPassInfo.clearValueCount = static_cast<uint32>(clearValues.size());
+				renderPassInfo.pClearValues = clearValues.data();
 
 				vkCmdBeginRenderPass(m_commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -677,7 +727,7 @@ namespace Singularity
 				VkDeviceSize offsets[] = { 0 };
 				vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 				vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-				vkCmdDraw(m_commandBuffers[i], static_cast<uint32_t>(6), 1, 0, 0); // TODO link to mesh
+				vkCmdDraw(m_commandBuffers[i], static_cast<uint32_t>(12), 1, 0, 0); // TODO link to mesh
 
 				vkCmdEndRenderPass(m_commandBuffers[i]);
 
@@ -790,7 +840,7 @@ namespace Singularity
 			int texHeight = 0;
 			int texChannels = 0;
 
-			std::string const textureFile = (std::string(DATA_DIRECTORY) + "Textures/will.jpg");
+			std::string const textureFile = (std::string(DATA_DIRECTORY) + "Textures/oscar.png");
 			stbi_uc* pixels = stbi_load(textureFile.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha); // TODO eewwwww
 			VkDeviceSize imageSize = static_cast<uint64>(texWidth) * static_cast<uint64>(texHeight) * 4u;
 
@@ -830,7 +880,7 @@ namespace Singularity
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateTextureImageView()
 		{
-			m_textureImageView = CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+			m_textureImageView = CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -891,7 +941,7 @@ namespace Singularity
 			}
 
 			VkMemoryRequirements memRequirements;
-			vkGetImageMemoryRequirements(device, m_textureImage, &memRequirements);
+			vkGetImageMemoryRequirements(device, _image, &memRequirements);
 
 			VkMemoryAllocateInfo allocInfo{};
 			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -907,14 +957,14 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
-		VkImageView Renderer::CreateImageView(VkImage _image, VkFormat _format)
+		VkImageView Renderer::CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags)
 		{
 			VkImageViewCreateInfo viewInfo{};
 			viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			viewInfo.image = _image;
 			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			viewInfo.format = _format;
-			viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			viewInfo.subresourceRange.aspectMask = _aspectFlags;
 			viewInfo.subresourceRange.baseMipLevel = 0;
 			viewInfo.subresourceRange.levelCount = 1;
 			viewInfo.subresourceRange.baseArrayLayer = 0;
@@ -981,6 +1031,45 @@ namespace Singularity
 			);
 
 			EndSingleTimeCommands(commandBuffer);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateDepthResources()
+		{
+			VkFormat const depthFormat = FindDepthFormat();
+			VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
+			CreateImage(swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
+			m_depthImageView = CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		VkFormat Renderer::FindDepthFormat() const
+		{
+			return FindSupportedFormat({ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT }, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		bool Renderer::HasStencilComponent(VkFormat _format) const
+		{
+			return ((_format == VK_FORMAT_D32_SFLOAT_S8_UINT) || (_format == VK_FORMAT_D24_UNORM_S8_UINT));
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		VkFormat Renderer::FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkImageTiling _tiling, VkFormatFeatureFlags _features) const
+		{
+			for (VkFormat format : _candidates) {
+				VkFormatProperties props;
+				vkGetPhysicalDeviceFormatProperties(m_device.GetPhysicalDevice(), format, &props);
+
+				if (_tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & _features) == _features) {
+					return format;
+				}
+				else if (_tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & _features) == _features) {
+					return format;
+				}
+			}
+
+			throw std::runtime_error("failed to find supported format!");
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////

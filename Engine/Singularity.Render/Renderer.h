@@ -74,8 +74,13 @@ namespace Singularity
 			void CreateTextureSampler();
 
 			void CreateImage(uint32 _width, uint32 _height, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) const;
-			VkImageView CreateImageView(VkImage _image, VkFormat _format);
+			VkImageView CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags);
 			void TransitionImageLayout(VkImage _image, VkFormat _format, VkImageLayout _oldLayout, VkImageLayout _newLayout);
+
+			void CreateDepthResources();
+			VkFormat FindDepthFormat() const;
+			bool HasStencilComponent(VkFormat _format) const;
+			VkFormat FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkImageTiling _tiling, VkFormatFeatureFlags _features) const; // TODO move to device???
 
 			void CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory); // TODO Hide buffers in their own class????
 			void CopyBuffer(VkBuffer _sourceBuffer, VkBuffer _destBuffer, VkDeviceSize _size);
@@ -103,6 +108,9 @@ namespace Singularity
 			VkDeviceMemory m_textureImageMemory;
 			VkSampler m_textureSampler;
 
+			VkImage m_depthImage;
+			VkDeviceMemory m_depthImageMemory;
+			VkImageView m_depthImageView;
 
 			std::vector<VkBuffer> m_uniformBuffers;
 			std::vector<VkDeviceMemory> m_uniformBuffersMemory;
