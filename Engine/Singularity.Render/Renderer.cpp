@@ -17,6 +17,7 @@
 // Engine Includes
 #include <Singularity.IO/IO.h>
 #include <Singularity.Render/Mesh.h>
+#include <Singularity.Render/MeshLoader.h>
 #include <Singularity.Window/Window.h>
 
 namespace Singularity
@@ -30,8 +31,12 @@ namespace Singularity
 			m_device(*this),
 			m_validation(*this),
 			m_swapChain(*this),
-			m_window(_window)
+			m_window(_window),
+			m_testMesh(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/anky.obj"))
 		{
+			/*std::string const meshFile = (std::string(DATA_DIRECTORY) + "Models/anky.obj");
+			m_testMesh = ;*/
+
 			Initialize();
 		}
 
@@ -530,36 +535,38 @@ namespace Singularity
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateVertexBuffer()
 		{
-			std::vector<Vertex> vertices;
+			//std::vector<Vertex> vertices;
 
-			// Triangle one
-			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
-			vertices.push_back(Vertex({ 0.0f, -0.5f, 0.0f }, { 1.0f, 0.25f, 0.0f, 1.0f }, { 0.0f, 0.0f }));
-			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
+			//// Triangle one
+			//vertices.push_back(Vertex({ -0.5f, 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
+			//vertices.push_back(Vertex({ 0.0f, -0.5f, 0.0f }, { 1.0f, 0.25f, 0.0f, 1.0f }, { 0.0f, 0.0f }));
+			//vertices.push_back(Vertex({ 0.5f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
 
-			// Triangle two
-			vertices.push_back(Vertex({ -0.5f, 0.0f, -0.25f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
-			vertices.push_back(Vertex({ 0.5f, 0.0f, -0.25f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
-			vertices.push_back(Vertex({ 0.0f, 0.5f, -0.25f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }));
-
-
-			// Second Quad
-			// Triangle one
-			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.5f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
-			vertices.push_back(Vertex({ 0.0f, -0.5f, 0.5f }, { 1.0f, 0.25f, 0.0f, 1.0f }, { 0.0f, 0.0f }));
-			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.5f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
-
-			// Triangle two
-			vertices.push_back(Vertex({ -0.5f, 0.0f, 0.25f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
-			vertices.push_back(Vertex({ 0.5f, 0.0f, 0.25f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
-			vertices.push_back(Vertex({ 0.0f, 0.5f, 0.25f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }));
+			//// Triangle two
+			//vertices.push_back(Vertex({ -0.5f, 0.0f, -0.25f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
+			//vertices.push_back(Vertex({ 0.5f, 0.0f, -0.25f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
+			//vertices.push_back(Vertex({ 0.0f, 0.5f, -0.25f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }));
 
 
-			Mesh diamond(vertices);
+			//// Second Quad
+			//// Triangle one
+			//vertices.push_back(Vertex({ -0.5f, 0.0f, 0.5f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
+			//vertices.push_back(Vertex({ 0.0f, -0.5f, 0.5f }, { 1.0f, 0.25f, 0.0f, 1.0f }, { 0.0f, 0.0f }));
+			//vertices.push_back(Vertex({ 0.5f, 0.0f, 0.5f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
+
+			//// Triangle two
+			//vertices.push_back(Vertex({ -0.5f, 0.0f, 0.25f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }));
+			//vertices.push_back(Vertex({ 0.5f, 0.0f, 0.25f }, { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f }));
+			//vertices.push_back(Vertex({ 0.0f, 0.5f, 0.25f }, { 0.0f, 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }));
+
+
+			//Mesh diamond(vertices);
+			// diamond not in use - using obj
+
 
 			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
 			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = sizeof(Vertex) * diamond.GetVertexCount();
+			bufferInfo.size = sizeof(Vertex) * m_testMesh.GetVertexCount();
 			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -568,7 +575,7 @@ namespace Singularity
 			VkDevice const logicalDevice = m_device.GetLogicalDevice();
 			void* data;
 			vkMapMemory(logicalDevice, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-			memcpy(data, vertices.data(), (size_t)bufferInfo.size);
+			memcpy(data, m_testMesh.GetVertices().data(), (size_t)bufferInfo.size);
 			vkUnmapMemory(logicalDevice, m_vertexBufferMemory);
 		}
 
@@ -726,7 +733,7 @@ namespace Singularity
 				VkDeviceSize offsets[] = { 0 };
 				vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
 				vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-				vkCmdDraw(m_commandBuffers[i], static_cast<uint32_t>(12), 1, 0, 0); // TODO link to mesh
+				vkCmdDraw(m_commandBuffers[i], m_testMesh.GetVertexCount(), 1, 0, 0); // TODO link to mesh
 
 				vkCmdEndRenderPass(m_commandBuffers[i]);
 
@@ -839,7 +846,7 @@ namespace Singularity
 			int texHeight = 0;
 			int texChannels = 0;
 
-			std::string const textureFile = (std::string(DATA_DIRECTORY) + "Textures/oscar.png");
+			std::string const textureFile = (std::string(DATA_DIRECTORY) + "Textures/anky.png");
 			stbi_uc* pixels = stbi_load(textureFile.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha); // TODO eewwwww
 			VkDeviceSize imageSize = static_cast<uint64>(texWidth) * static_cast<uint64>(texHeight) * 4u;
 

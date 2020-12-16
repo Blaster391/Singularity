@@ -5,6 +5,7 @@
 #include <Singularity.Core/CoreDeclare.h>
 #include <Singularity.Render/Device.h>
 #include <Singularity.Render/GenericUniformBufferObject.h>
+#include <Singularity.Render/Mesh.h>
 #include <Singularity.Render/SwapChain.h>
 #include <Singularity.Render/Validation.h>
 
@@ -17,6 +18,7 @@ namespace Singularity
 
 	namespace Render
 	{
+
 		class Renderer
 		{
 		public:
@@ -127,6 +129,8 @@ namespace Singularity
 
 			Window::Window& m_window;
 
+
+			Mesh m_testMesh;
 		};
 
 	}
