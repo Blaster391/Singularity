@@ -60,6 +60,7 @@ namespace Singularity
 			void CreateFramebuffers();
 
 			void CreateVertexBuffer();
+			void CreateIndexBuffer();
 			void CreateUniformBuffers();
 			void CreateDescriptorPool();
 			void CreateDescriptorSets();
@@ -103,7 +104,10 @@ namespace Singularity
 			VkPipelineLayout m_pipelineLayout;
 
 			VkBuffer m_vertexBuffer; // TODO move all these into their own classes, don't rebuild on window resize
-			VkDeviceMemory m_vertexBufferMemory; // TODO index buffers
+			VkDeviceMemory m_vertexBufferMemory;
+			VkBuffer m_indexBuffer;
+			VkDeviceMemory m_indexBufferMemory;
+
 
 			VkImage m_textureImage;
 			VkImageView m_textureImageView;

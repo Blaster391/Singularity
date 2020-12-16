@@ -161,7 +161,7 @@ namespace Singularity
 			GenericUniformBufferObject ubo{};
 			ubo.m_model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
-			ubo.m_view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+			ubo.m_view = glm::lookAt(glm::vec3(1.0f, 1.0f, 10.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
 			VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
 			ubo.m_projection = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
@@ -208,11 +208,13 @@ namespace Singularity
 			CreateRenderPass();
 			CreateGraphicsPipeline();
 			
-			CreateVertexBuffer();
-			CreateUniformBuffers();
-			CreateDescriptorPool();
 
 			CreateCommandPool(); // TODO ordering and cleanup and not rebuilding stuff i shouldn't
+
+			CreateVertexBuffer();
+			CreateIndexBuffer();
+			CreateUniformBuffers();
+			CreateDescriptorPool();
 
 			CreateDepthResources();
 			CreateFramebuffers();
@@ -244,6 +246,9 @@ namespace Singularity
 			vkFreeMemory(logicalDevice, m_textureImageMemory, nullptr);
 
 			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
+
+			vkDestroyBuffer(logicalDevice, m_indexBuffer, nullptr);
+			vkFreeMemory(logicalDevice, m_indexBufferMemory, nullptr);
 
 			vkDestroyBuffer(logicalDevice, m_vertexBuffer, nullptr);
 			vkFreeMemory(logicalDevice, m_vertexBufferMemory, nullptr);
@@ -563,20 +568,72 @@ namespace Singularity
 			//Mesh diamond(vertices);
 			// diamond not in use - using obj
 
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+
+			VkDeviceSize bufferSize = sizeof(Vertex) * m_testMesh.GetVertexCount();
+			VkBufferCreateInfo stagingBufferInfo{}; // TODO move inside Mesh
+			stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			stagingBufferInfo.size = sizeof(Vertex) * m_testMesh.GetVertexCount();
+			stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+			stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			CreateBuffer(stagingBufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			VkDevice const logicalDevice = m_device.GetLogicalDevice();
+			void* data;
+			vkMapMemory(logicalDevice, stagingBufferMemory, 0, stagingBufferInfo.size, 0, &data);
+			memcpy(data, m_testMesh.GetVertices().data(), (size_t)stagingBufferInfo.size);
+			vkUnmapMemory(logicalDevice, stagingBufferMemory);
 
 			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
 			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = sizeof(Vertex) * m_testMesh.GetVertexCount();
-			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			bufferInfo.size = bufferSize;
+			bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 			CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_vertexBuffer, m_vertexBufferMemory);
 
-			VkDevice const logicalDevice = m_device.GetLogicalDevice();
+			CopyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
+
+			vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
+			vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////
+		void Renderer::CreateIndexBuffer()
+		{
+			VkDeviceSize bufferSize = sizeof(uint32) * m_testMesh.GetIndexCount();
+
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+
+			VkBufferCreateInfo stagingBufferInfo{}; // TODO move inside Mesh
+			stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			stagingBufferInfo.size = bufferSize;
+			stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+			stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			CreateBuffer(stagingBufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+
+			VkDevice const device = m_device.GetLogicalDevice();
 			void* data;
-			vkMapMemory(logicalDevice, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-			memcpy(data, m_testMesh.GetVertices().data(), (size_t)bufferInfo.size);
-			vkUnmapMemory(logicalDevice, m_vertexBufferMemory);
+			vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+			memcpy(data, m_testMesh.GetIndices().data(), (size_t)bufferSize);
+			vkUnmapMemory(device, stagingBufferMemory);
+
+			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = bufferSize;
+			bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
+
+			CopyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+			vkFreeMemory(device, stagingBufferMemory, nullptr);
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -732,8 +789,10 @@ namespace Singularity
 				VkBuffer vertexBuffers[] = { m_vertexBuffer }; // TODO link to mesh
 				VkDeviceSize offsets[] = { 0 };
 				vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
+				vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
 				vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-				vkCmdDraw(m_commandBuffers[i], m_testMesh.GetVertexCount(), 1, 0, 0); // TODO link to mesh
+				vkCmdDrawIndexed(m_commandBuffers[i], m_testMesh.GetIndexCount(), 1, 0, 0, 0); // TODO link to mesh
 
 				vkCmdEndRenderPass(m_commandBuffers[i]);
 
@@ -1094,7 +1153,7 @@ namespace Singularity
 			allocInfo.allocationSize = memRequirements.size;
 			allocInfo.memoryTypeIndex = m_device.FindMemoryType(memRequirements.memoryTypeBits, _properties);
 
-			if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &o_bufferMemory) != VK_SUCCESS) {
+			if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &o_bufferMemory) != VK_SUCCESS) { // TODO - group model buffers and stuff - vkALlocateMemory is limited https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer (conclusion)
 				throw std::runtime_error("failed to allocate buffer memory!");
 			}
 

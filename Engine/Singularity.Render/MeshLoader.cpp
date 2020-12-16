@@ -38,10 +38,32 @@ namespace Singularity
 			auto& shapes = reader.GetShapes();
 
 			std::vector<Vertex> vertices;
-			vertices.reserve(attrib.vertices.size() / 3);
-			for (uint64 i = 0; (i + 2) < attrib.vertices.size(); i = i + 3)
+
+			uint64 const vertexCount = attrib.vertices.size() / 3;
+
+			vertices.reserve(vertexCount);
+
+
+			for (uint64 i = 0; i < vertexCount; ++i)
 			{
-				vertices.push_back(Vertex({ attrib.vertices[i], attrib.vertices[i + 1], attrib.vertices[i + 2] }));
+				uint64 vertOffset = i * 3;
+				uint64 uvOffset = i * 2;
+
+				glm::vec3 position = { attrib.vertices[vertOffset], attrib.vertices[vertOffset + 1], attrib.vertices[vertOffset + 2] };
+
+				glm::vec4 colour(0, 0, 0, 0);
+				if (vertOffset + 2 < attrib.colors.size())
+				{
+					colour = { attrib.colors[vertOffset], attrib.colors[vertOffset + 1], attrib.colors[vertOffset + 2], 1.0f };
+				}
+
+				glm::vec2 uv(0, 0);
+				if (uvOffset + 1 < attrib.texcoords.size())
+				{
+					uv = { attrib.texcoords[uvOffset], attrib.texcoords[uvOffset + 1] };
+				}
+
+				vertices.push_back(Vertex(position, colour, uv));
 			}
 
 
@@ -57,40 +79,45 @@ namespace Singularity
 				throw std::runtime_error("TinyObjReader: could not find shape in " + _file);
 			}
 
-			// TODO indicies
+			std::vector<uint32> indices;
+			auto const& shape = shapes.front();
+			indices.reserve(shape.mesh.indices.size());
+			// Loop over faces(polygon)
+			size_t index_offset = 0;
+			for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++)
+			{
 
-			//auto const& shape = shapes.front();
-			//// Loop over faces(polygon)
-			//size_t index_offset = 0;
-			//for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); f++)
-			//{
-			//	int fv = shape.mesh.num_face_vertices[f];
+				int fv = shape.mesh.num_face_vertices[f];
 
-			//	// Loop over vertices in the face.
-			//	for (size_t v = 0; v < fv; v++) {
-			//		// access to vertex
-			//		tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
-			//		tinyobj::real_t vx = attrib.vertices[3 * idx.vertex_index + 0];
-			//		tinyobj::real_t vy = attrib.vertices[3 * idx.vertex_index + 1];
-			//		tinyobj::real_t vz = attrib.vertices[3 * idx.vertex_index + 2];
-			//		tinyobj::real_t nx = attrib.normals[3 * idx.normal_index + 0];
-			//		tinyobj::real_t ny = attrib.normals[3 * idx.normal_index + 1];
-			//		tinyobj::real_t nz = attrib.normals[3 * idx.normal_index + 2];
-			//		tinyobj::real_t tx = attrib.texcoords[2 * idx.texcoord_index + 0];
-			//		tinyobj::real_t ty = attrib.texcoords[2 * idx.texcoord_index + 1];
-			//		// Optional: vertex colors
-			//		// tinyobj::real_t red = attrib.colors[3*idx.vertex_index+0];
-			//		// tinyobj::real_t green = attrib.colors[3*idx.vertex_index+1];
-			//		// tinyobj::real_t blue = attrib.colors[3*idx.vertex_index+2];
-			//	}
-			//	index_offset += fv;
+				// Loop over vertices in the face.
+				for (size_t v = 0; v < fv; v++) {
+					// access to vertex
+					tinyobj::index_t idx = shape.mesh.indices[index_offset + v];
+					indices.push_back(idx.vertex_index);
 
-			//	// per-face material
-			//	shapes[s].mesh.material_ids[f];
-			//}
-			//
 
-			return Mesh(vertices);
+
+					//tinyobj::real_t vx = attrib.vertices[3 * idx.vertex_index + 0];
+					//tinyobj::real_t vy = attrib.vertices[3 * idx.vertex_index + 1];
+					//tinyobj::real_t vz = attrib.vertices[3 * idx.vertex_index + 2];
+					//tinyobj::real_t nx = attrib.normals[3 * idx.normal_index + 0];
+					//tinyobj::real_t ny = attrib.normals[3 * idx.normal_index + 1];
+					//tinyobj::real_t nz = attrib.normals[3 * idx.normal_index + 2];
+					//tinyobj::real_t tx = attrib.texcoords[2 * idx.texcoord_index + 0];
+					//tinyobj::real_t ty = attrib.texcoords[2 * idx.texcoord_index + 1];
+					// Optional: vertex colors
+					// tinyobj::real_t red = attrib.colors[3*idx.vertex_index+0];
+					// tinyobj::real_t green = attrib.colors[3*idx.vertex_index+1];
+					// tinyobj::real_t blue = attrib.colors[3*idx.vertex_index+2];
+				}
+				index_offset += fv;
+
+				// per-face material
+				//shapes[s].mesh.material_ids[f];
+			}
+			
+
+			return Mesh(vertices, indices);
 		}
 	}
 }
