@@ -157,6 +157,7 @@
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="GenericUniformBufferObject.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="SwapChain.cpp" />
     <ClCompile Include="Validation.cpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="Device.h" />
     <ClInclude Include="GenericUniformBufferObject.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="MeshLoader.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="SwapChain.h" />
     <ClInclude Include="Validation.h" />

@@ -136,11 +136,6 @@ namespace Singularity
 
 			m_swapChain.Shutdown();
 
-			vkDestroySampler(device, m_textureSampler, nullptr);
-			vkDestroyImageView(device, m_textureImageView, nullptr);
-			vkDestroyImage(device, m_textureImage, nullptr); // TODO - maybe rebuild????
-			vkFreeMemory(device, m_textureImageMemory, nullptr);
-
 			m_device.Shutdown();
 
 			m_validation.Shutdown();
@@ -238,6 +233,10 @@ namespace Singularity
 			vkDestroyImage(logicalDevice, m_depthImage, nullptr);
 			vkFreeMemory(logicalDevice, m_depthImageMemory, nullptr);
 
+			vkDestroySampler(logicalDevice, m_textureSampler, nullptr);
+			vkDestroyImageView(logicalDevice, m_textureImageView, nullptr);
+			vkDestroyImage(logicalDevice, m_textureImage, nullptr);
+			vkFreeMemory(logicalDevice, m_textureImageMemory, nullptr);
 
 			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
 
