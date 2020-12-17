@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <Singularity.Core/CoreDeclare.h>
+#include <Singularity.Render/Buffer.h>
 
 namespace Singularity
 {
@@ -60,22 +61,43 @@ namespace Singularity
 			}
 		};
 
+		class Renderer;
+
 		class Mesh
 		{
 		public:
-			Mesh(std::vector<Vertex> const& _vertices);
-			Mesh(std::vector<Vertex> const& _vertices, std::vector<uint32> _indices);
+			Mesh() {}
+			Mesh(std::vector<Vertex> const& _vertices) { SetData(_vertices); }
+			Mesh(std::vector<Vertex> const& _vertices, std::vector<uint32> _indices) { SetData(_vertices, _indices); }
+
 			~Mesh();
 
+			void SetData(std::vector<Vertex> const& _vertices);
+			void SetData(std::vector<Vertex> const& _vertices, std::vector<uint32> _indices);
+
+			void Buffer(Renderer& _renderer);
+			void Unbuffer();
+
+			bool UseIndices() const { return !m_indices.empty(); }
 			std::vector<Vertex> const& GetVertices() const { return m_vertices; }
 			std::vector<uint32> const& GetIndices() const { return m_indices; }
 
 			uint32 GetVertexCount() const { return static_cast<uint32>(m_vertices.size()); }
 			uint32 GetIndexCount() const { return static_cast<uint32>(m_indices.size()); }
-		private:
 
-			std::vector<Vertex> const m_vertices;
-			std::vector<uint32> const m_indices;
+			Render::Buffer const* GetVertexBuffer() const { return m_vertexBuffer; }
+			Render::Buffer const* GetIndexBuffer() const { return m_indexBuffer; }
+
+		private:
+			std::vector<Vertex> m_vertices;
+			std::vector<uint32> m_indices;
+
+			bool m_valid = false;
+			bool m_buffered = false;
+
+			Render::Buffer* m_vertexBuffer = nullptr;
+			Render::Buffer* m_indexBuffer = nullptr;
+
 		};
 	}
 }

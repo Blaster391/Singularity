@@ -66,16 +66,16 @@ namespace Singularity
 				// Loop over vertices in the face.
 				for (size_t v = 0; v < fv; v++) {
 					// access to vertex
-					uint32 const indexVal = index_offset + v;
+					uint32 const indexVal = (uint32)index_offset + v;
 					tinyobj::index_t idx = shape.mesh.indices[indexVal];
 					indices.push_back(indexVal);
 
-					glm::vec3 position = { attrib.vertices[3 * idx.vertex_index], attrib.vertices[3 * idx.vertex_index + 1], attrib.vertices[3 * idx.vertex_index + 2] };
+					glm::vec3 position = { attrib.vertices[(uint64)3 * idx.vertex_index], attrib.vertices[(uint64)3 * idx.vertex_index + 1], attrib.vertices[(uint64)3 * idx.vertex_index + 2] };
 					glm::vec4 colour(0,0,0,0);
 					glm::vec2 uv(0, 0);
 					if (idx.texcoord_index > 0u)
 					{
-						uv = { attrib.texcoords[2 * idx.texcoord_index], 1.0f -  attrib.texcoords[2 * idx.texcoord_index + 1] }; // (1.0f - coordY) because obj is upside down
+						uv = { attrib.texcoords[(uint64)2 * idx.texcoord_index], 1.0f -  attrib.texcoords[(uint64)2 * idx.texcoord_index + 1] }; // (1.0f - coordY) because obj is upside down
 					}
 
 					vertices.push_back(Vertex(position, colour, uv));

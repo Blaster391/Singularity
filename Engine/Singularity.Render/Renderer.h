@@ -36,6 +36,9 @@ namespace Singularity
 
 			void RebuildSwapChain();
 
+			VkCommandBuffer BeginSingleTimeCommands(); // TODO extract out command buffer stuff
+			void EndSingleTimeCommands(VkCommandBuffer _commandBuffer);
+
 		private:
 			void Initialize();
 			void Shutdown();
@@ -60,15 +63,12 @@ namespace Singularity
 			void CreateFramebuffers();
 
 			void CreateVertexBuffer();
-			void CreateIndexBuffer();
 			void CreateUniformBuffers();
 			void CreateDescriptorPool();
 			void CreateDescriptorSets();
 
 			void CreateCommandPool();
 			void CreateCommandBuffers();
-			VkCommandBuffer BeginSingleTimeCommands();
-			void EndSingleTimeCommands(VkCommandBuffer _commandBuffer);
 
 			void CreateSemaphores();
 
@@ -102,12 +102,6 @@ namespace Singularity
 			VkRenderPass m_renderPass;
 			VkPipeline m_graphicsPipeline;
 			VkPipelineLayout m_pipelineLayout;
-
-			VkBuffer m_vertexBuffer; // TODO move all these into their own classes, don't rebuild on window resize
-			VkDeviceMemory m_vertexBufferMemory;
-			VkBuffer m_indexBuffer;
-			VkDeviceMemory m_indexBufferMemory;
-
 
 			VkImage m_textureImage;
 			VkImageView m_textureImageView;

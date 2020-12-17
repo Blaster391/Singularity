@@ -212,7 +212,6 @@ namespace Singularity
 			CreateCommandPool(); // TODO ordering and cleanup and not rebuilding stuff i shouldn't
 
 			CreateVertexBuffer();
-			CreateIndexBuffer();
 			CreateUniformBuffers();
 			CreateDescriptorPool();
 
@@ -247,11 +246,7 @@ namespace Singularity
 
 			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
 
-			vkDestroyBuffer(logicalDevice, m_indexBuffer, nullptr);
-			vkFreeMemory(logicalDevice, m_indexBufferMemory, nullptr);
-
-			vkDestroyBuffer(logicalDevice, m_vertexBuffer, nullptr);
-			vkFreeMemory(logicalDevice, m_vertexBufferMemory, nullptr);
+			m_testMesh.Unbuffer();
 
 			vkDestroyDescriptorPool(logicalDevice, m_descriptorPool, nullptr);
 
@@ -568,72 +563,8 @@ namespace Singularity
 			//Mesh diamond(vertices);
 			// diamond not in use - using obj
 
-			VkBuffer stagingBuffer;
-			VkDeviceMemory stagingBufferMemory;
+			m_testMesh.Buffer(*this);
 
-			VkDeviceSize bufferSize = sizeof(Vertex) * m_testMesh.GetVertexCount();
-			VkBufferCreateInfo stagingBufferInfo{}; // TODO move inside Mesh
-			stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			stagingBufferInfo.size = sizeof(Vertex) * m_testMesh.GetVertexCount();
-			stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-			stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-			CreateBuffer(stagingBufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-			VkDevice const logicalDevice = m_device.GetLogicalDevice();
-			void* data;
-			vkMapMemory(logicalDevice, stagingBufferMemory, 0, stagingBufferInfo.size, 0, &data);
-			memcpy(data, m_testMesh.GetVertices().data(), (size_t)stagingBufferInfo.size);
-			vkUnmapMemory(logicalDevice, stagingBufferMemory);
-
-			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
-			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = bufferSize;
-			bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-			CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_vertexBuffer, m_vertexBufferMemory);
-
-			CopyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
-
-			vkDestroyBuffer(logicalDevice, stagingBuffer, nullptr);
-			vkFreeMemory(logicalDevice, stagingBufferMemory, nullptr);
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateIndexBuffer()
-		{
-			VkDeviceSize bufferSize = sizeof(uint32) * m_testMesh.GetIndexCount();
-
-			VkBuffer stagingBuffer;
-			VkDeviceMemory stagingBufferMemory;
-
-			VkBufferCreateInfo stagingBufferInfo{}; // TODO move inside Mesh
-			stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			stagingBufferInfo.size = bufferSize;
-			stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-			stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			CreateBuffer(stagingBufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-
-			VkDevice const device = m_device.GetLogicalDevice();
-			void* data;
-			vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-			memcpy(data, m_testMesh.GetIndices().data(), (size_t)bufferSize);
-			vkUnmapMemory(device, stagingBufferMemory);
-
-			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
-			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = bufferSize;
-			bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-			CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
-
-			CopyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
-
-			vkDestroyBuffer(device, stagingBuffer, nullptr);
-			vkFreeMemory(device, stagingBufferMemory, nullptr);
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -786,13 +717,26 @@ namespace Singularity
 
 				vkCmdBindPipeline(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-				VkBuffer vertexBuffers[] = { m_vertexBuffer }; // TODO link to mesh
-				VkDeviceSize offsets[] = { 0 };
-				vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
-				vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+				if (m_testMesh.UseIndices())
+				{
+					VkBuffer vertexBuffers[] = { m_testMesh.GetVertexBuffer()->GetBuffer() };
+					VkDeviceSize offsets[] = { 0 };
+					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
+					vkCmdBindIndexBuffer(m_commandBuffers[i], m_testMesh.GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-				vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-				vkCmdDrawIndexed(m_commandBuffers[i], m_testMesh.GetIndexCount(), 1, 0, 0, 0); // TODO link to mesh
+					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+					vkCmdDrawIndexed(m_commandBuffers[i], m_testMesh.GetIndexCount(), 1, 0, 0, 0); 
+				}
+				else
+				{
+					VkBuffer vertexBuffers[] = { m_testMesh.GetVertexBuffer()->GetBuffer() };
+					VkDeviceSize offsets[] = { 0 };
+					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+					vkCmdDraw(m_commandBuffers[i], m_testMesh.GetVertexCount(), 1, 0, 0);
+				}
+
 
 				vkCmdEndRenderPass(m_commandBuffers[i]);
 

@@ -154,6 +154,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Buffer.cpp" />
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="GenericUniformBufferObject.cpp" />
     <ClCompile Include="Mesh.cpp" />
@@ -163,6 +164,7 @@
     <ClCompile Include="Validation.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Buffer.h" />
     <ClInclude Include="Device.h" />
     <ClInclude Include="GenericUniformBufferObject.h" />
     <ClInclude Include="Mesh.h" />
