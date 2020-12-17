@@ -32,7 +32,8 @@ namespace Singularity
 			m_validation(*this),
 			m_swapChain(*this),
 			m_window(_window),
-			m_testMesh(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/anky.obj"))
+			m_testMesh(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/anky.obj")),
+			m_testMesh2(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/testSphere.obj"))
 		{
 			/*std::string const meshFile = (std::string(DATA_DIRECTORY) + "Models/anky.obj");
 			m_testMesh = ;*/
@@ -246,6 +247,7 @@ namespace Singularity
 
 			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
 
+			m_testMesh2.Unbuffer();
 			m_testMesh.Unbuffer();
 
 			vkDestroyDescriptorPool(logicalDevice, m_descriptorPool, nullptr);
@@ -564,7 +566,7 @@ namespace Singularity
 			// diamond not in use - using obj
 
 			m_testMesh.Buffer(*this);
-
+			m_testMesh2.Buffer(*this);
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -706,7 +708,7 @@ namespace Singularity
 				renderPassInfo.renderArea.offset = { 0, 0 };
 				renderPassInfo.renderArea.extent = m_swapChain.GetExtent();
 
-				std::array<VkClearValue, 2> clearValues{};
+				std::array<VkClearValue, 2> clearValues{}; // TODO programmable clear colours
 				clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
 				clearValues[1].depthStencil = { 1.0f, 0 };
 
@@ -736,6 +738,28 @@ namespace Singularity
 					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
 					vkCmdDraw(m_commandBuffers[i], m_testMesh.GetVertexCount(), 1, 0, 0);
 				}
+
+
+				if (m_testMesh2.UseIndices())
+				{
+					VkBuffer vertexBuffers[] = { m_testMesh2.GetVertexBuffer()->GetBuffer() };
+					VkDeviceSize offsets[] = { 0 };
+					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
+					vkCmdBindIndexBuffer(m_commandBuffers[i], m_testMesh2.GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+					vkCmdDrawIndexed(m_commandBuffers[i], m_testMesh2.GetIndexCount(), 1, 0, 0, 0);
+				}
+				else
+				{
+					VkBuffer vertexBuffers[] = { m_testMesh2.GetVertexBuffer()->GetBuffer() };
+					VkDeviceSize offsets[] = { 0 };
+					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
+					vkCmdDraw(m_commandBuffers[i], m_testMesh2.GetVertexCount(), 1, 0, 0);
+				}
+
 
 
 				vkCmdEndRenderPass(m_commandBuffers[i]);

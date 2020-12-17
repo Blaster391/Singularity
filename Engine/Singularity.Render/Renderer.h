@@ -129,6 +129,7 @@ namespace Singularity
 
 
 			Mesh m_testMesh;
+			Mesh m_testMesh2;
 		};
 
 	}
