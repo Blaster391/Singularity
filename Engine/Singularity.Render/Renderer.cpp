@@ -35,9 +35,6 @@ namespace Singularity
 			m_testMesh(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/anky.obj")),
 			m_testMesh2(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/testSphere.obj"))
 		{
-			/*std::string const meshFile = (std::string(DATA_DIRECTORY) + "Models/anky.obj");
-			m_testMesh = ;*/
-
 			Initialize();
 		}
 
@@ -55,12 +52,13 @@ namespace Singularity
 
 			if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 				RebuildSwapChain();
+				CreateCommandBuffers();
 				return;
 			}
 			else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 				throw std::runtime_error("failed to acquire swap chain image!");
 			}
-
+			
 			UpdateUniformBuffers(imageIndex);
 
 			VkSubmitInfo submitInfo{};
@@ -128,16 +126,35 @@ namespace Singularity
 			m_swapChain.Initialize();
 
 			CreateDescriptorSetLayout();
-			CreatePipeline();
 
+			CreateUniformBuffers();
+
+			CreatePipeline();
+		
+			CreateVertexBuffer();
+			CreateCommandBuffers();
+
+			CreateSemaphores();
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::Shutdown()
 		{
+			VkDevice const device = m_device.GetLogicalDevice();
+
+			vkDestroySemaphore(device, m_renderFinishedSemaphore, nullptr);
+			vkDestroySemaphore(device, m_imageAvailableSemaphore, nullptr);
+
+			m_testMesh2.Unbuffer();
+			m_testMesh.Unbuffer();
+
 			DestroyPipeline();
 
-			VkDevice const device = m_device.GetLogicalDevice();
+			for (size_t i = 0; i < m_swapChain.GetImageViews().size(); i++) {
+				vkDestroyBuffer(device, m_uniformBuffers[i], nullptr);
+				vkFreeMemory(device, m_uniformBuffersMemory[i], nullptr);
+			}
+			
 			vkDestroyDescriptorSetLayout(device, m_descriptorSetLayout, nullptr);
 
 			m_swapChain.Shutdown();
@@ -208,12 +225,9 @@ namespace Singularity
 		{
 			CreateRenderPass();
 			CreateGraphicsPipeline();
-			
 
 			CreateCommandPool(); // TODO ordering and cleanup and not rebuilding stuff i shouldn't
 
-			CreateVertexBuffer();
-			CreateUniformBuffers();
 			CreateDescriptorPool();
 
 			CreateDepthResources();
@@ -225,16 +239,12 @@ namespace Singularity
 
 			CreateDescriptorSets();
 			
-			CreateCommandBuffers();
-			CreateSemaphores();
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::DestroyPipeline()
 		{
 			VkDevice const logicalDevice = m_device.GetLogicalDevice();
-			vkDestroySemaphore(logicalDevice, m_renderFinishedSemaphore, nullptr);
-			vkDestroySemaphore(logicalDevice, m_imageAvailableSemaphore, nullptr);
 
 			vkDestroyImageView(logicalDevice, m_depthImageView, nullptr);
 			vkDestroyImage(logicalDevice, m_depthImage, nullptr);
@@ -247,15 +257,7 @@ namespace Singularity
 
 			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
 
-			m_testMesh2.Unbuffer();
-			m_testMesh.Unbuffer();
-
 			vkDestroyDescriptorPool(logicalDevice, m_descriptorPool, nullptr);
-
-			for (size_t i = 0; i < m_swapChain.GetImageViews().size(); i++) {
-				vkDestroyBuffer(logicalDevice, m_uniformBuffers[i], nullptr);
-				vkFreeMemory(logicalDevice, m_uniformBuffersMemory[i], nullptr);
-			}
 
 			for (auto framebuffer : m_swapChainFramebuffers) {
 				vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
