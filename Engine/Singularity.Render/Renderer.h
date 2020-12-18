@@ -19,6 +19,8 @@ namespace Singularity
 	namespace Render
 	{
 
+		class Buffer;
+
 		class Renderer
 		{
 		public:
@@ -85,11 +87,6 @@ namespace Singularity
 			bool HasStencilComponent(VkFormat _format) const;
 			VkFormat FindSupportedFormat(const std::vector<VkFormat>& _candidates, VkImageTiling _tiling, VkFormatFeatureFlags _features) const; // TODO move to device???
 
-			void CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory); // TODO Hide buffers in their own class????
-			void CopyBuffer(VkBuffer _sourceBuffer, VkBuffer _destBuffer, VkDeviceSize _size);
-			void CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32 _width, uint32 _height);
-
-
 			VkInstance m_instance;
 			VkSurfaceKHR m_surface;
 
@@ -112,8 +109,7 @@ namespace Singularity
 			VkDeviceMemory m_depthImageMemory;
 			VkImageView m_depthImageView;
 
-			std::vector<VkBuffer> m_uniformBuffers;
-			std::vector<VkDeviceMemory> m_uniformBuffersMemory;
+			std::vector<Buffer> m_uniformBuffers;
 
 			VkCommandPool m_commandPool;
 			std::vector<VkCommandBuffer> m_commandBuffers;
@@ -126,7 +122,6 @@ namespace Singularity
 			SwapChain m_swapChain;
 
 			Window::Window& m_window;
-
 
 			Mesh m_testMesh;
 			Mesh m_testMesh2;

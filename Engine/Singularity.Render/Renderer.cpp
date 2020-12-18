@@ -151,8 +151,7 @@ namespace Singularity
 			DestroyPipeline();
 
 			for (size_t i = 0; i < m_swapChain.GetImageViews().size(); i++) {
-				vkDestroyBuffer(device, m_uniformBuffers[i], nullptr);
-				vkFreeMemory(device, m_uniformBuffersMemory[i], nullptr);
+				m_uniformBuffers[i].DestroyBuffer();
 			}
 			
 			vkDestroyDescriptorSetLayout(device, m_descriptorSetLayout, nullptr);
@@ -187,9 +186,9 @@ namespace Singularity
 			ubo.m_projection[1][1] *= -1;
 
 			void* data;
-			vkMapMemory(m_device.GetLogicalDevice(), m_uniformBuffersMemory[_imageIndex], 0, sizeof(ubo), 0, &data);
+			vkMapMemory(m_device.GetLogicalDevice(), m_uniformBuffers[_imageIndex].GetBufferMemory(), 0, sizeof(ubo), 0, &data);
 			memcpy(data, &ubo, sizeof(ubo));
-			vkUnmapMemory(m_device.GetLogicalDevice(), m_uniformBuffersMemory[_imageIndex]);
+			vkUnmapMemory(m_device.GetLogicalDevice(), m_uniformBuffers[_imageIndex].GetBufferMemory());
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -227,6 +226,7 @@ namespace Singularity
 			CreateGraphicsPipeline();
 
 			CreateCommandPool(); // TODO ordering and cleanup and not rebuilding stuff i shouldn't
+								 // Can not just make this command pool once? Would have to free commands manually tho
 
 			CreateDescriptorPool();
 
@@ -575,17 +575,18 @@ namespace Singularity
 		void Renderer::CreateUniformBuffers()
 		{
 			size_t const imageViewCount = m_swapChain.GetImageViews().size();
-			m_uniformBuffers.resize(imageViewCount);
-			m_uniformBuffersMemory.resize(imageViewCount);
+			m_uniformBuffers.reserve(imageViewCount);
 
-			VkBufferCreateInfo bufferInfo{}; // TODO move inside Mesh
+			
+			VkBufferCreateInfo bufferInfo{}; // TODO allocate multiple slots for multiple objects
 			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 			bufferInfo.size = sizeof(GenericUniformBufferObject);
 			bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 			for (size_t i = 0; i < imageViewCount; i++) {
-				CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffers[i], m_uniformBuffersMemory[i]);
+				Buffer& newBuffer = m_uniformBuffers.emplace_back(*this);
+				newBuffer.CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 			}
 		}
 
@@ -632,7 +633,7 @@ namespace Singularity
 
 			for (size_t i = 0; i < descriptorCount; i++) {
 				VkDescriptorBufferInfo bufferInfo{};
-				bufferInfo.buffer = m_uniformBuffers[i];
+				bufferInfo.buffer = m_uniformBuffers[i].GetBuffer();
 				bufferInfo.offset = 0;
 				bufferInfo.range = sizeof(GenericUniformBufferObject);
 
@@ -810,50 +811,50 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CopyBuffer(VkBuffer _sourceBuffer, VkBuffer _destBuffer, VkDeviceSize _size)
-		{
-			VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+		//void Renderer::CopyBuffer(VkBuffer _sourceBuffer, VkBuffer _destBuffer, VkDeviceSize _size)
+		//{
+		//	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
-			VkBufferCopy copyRegion{};
-			copyRegion.size = _size;
-			vkCmdCopyBuffer(commandBuffer, _sourceBuffer, _destBuffer, 1, &copyRegion);
+		//	VkBufferCopy copyRegion{};
+		//	copyRegion.size = _size;
+		//	vkCmdCopyBuffer(commandBuffer, _sourceBuffer, _destBuffer, 1, &copyRegion);
 
-			EndSingleTimeCommands(commandBuffer);
-		}
+		//	EndSingleTimeCommands(commandBuffer);
+		//}
 
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32 _width, uint32 _height)
-		{
-			VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+		////////////////////////////////////////////////////////////////////////////////////////
+		//void Renderer::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32 _width, uint32 _height)
+		//{
+		//	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
-			VkBufferImageCopy region{};
-			region.bufferOffset = 0;
-			region.bufferRowLength = 0;
-			region.bufferImageHeight = 0;
+		//	VkBufferImageCopy region{};
+		//	region.bufferOffset = 0;
+		//	region.bufferRowLength = 0;
+		//	region.bufferImageHeight = 0;
 
-			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.imageSubresource.mipLevel = 0;
-			region.imageSubresource.baseArrayLayer = 0;
-			region.imageSubresource.layerCount = 1;
+		//	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		//	region.imageSubresource.mipLevel = 0;
+		//	region.imageSubresource.baseArrayLayer = 0;
+		//	region.imageSubresource.layerCount = 1;
 
-			region.imageOffset = { 0, 0, 0 };
-			region.imageExtent = {
-				_width,
-				_height,
-				1
-			};
+		//	region.imageOffset = { 0, 0, 0 };
+		//	region.imageExtent = {
+		//		_width,
+		//		_height,
+		//		1
+		//	};
 
-			vkCmdCopyBufferToImage(
-				commandBuffer,
-				_buffer,
-				_image,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				1,
-				&region
-			);
+		//	vkCmdCopyBufferToImage(
+		//		commandBuffer,
+		//		_buffer,
+		//		_image,
+		//		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		//		1,
+		//		&region
+		//	);
 
-			EndSingleTimeCommands(commandBuffer);
-		}
+		//	EndSingleTimeCommands(commandBuffer);
+		//}
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateSemaphores()
@@ -889,27 +890,25 @@ namespace Singularity
 			bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-			VkBuffer stagingBuffer; // Currently just used for textures
-			VkDeviceMemory stagingBufferMemory;
 
-			CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+			Buffer stagingBuffer(*this);
+			stagingBuffer.CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			VkDevice const device = m_device.GetLogicalDevice();
 			void* data;
-			vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data); // TODO destroy meeeee
+			vkMapMemory(device, stagingBuffer.GetBufferMemory(), 0, imageSize, 0, &data);
 			memcpy(data, pixels, static_cast<size_t>(imageSize));
-			vkUnmapMemory(device, stagingBufferMemory);
+			vkUnmapMemory(device, stagingBuffer.GetBufferMemory());
 
 			stbi_image_free(pixels);
 
 			CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_textureImage, m_textureImageMemory);
 
 			TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			CopyBufferToImage(stagingBuffer, m_textureImage, static_cast<uint32>(texWidth), static_cast<uint32>(texHeight));
+			stagingBuffer.CopyBufferToImage(m_textureImage, static_cast<uint32>(texWidth), static_cast<uint32>(texHeight));
 			TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-			vkDestroyBuffer(device, stagingBuffer, nullptr);
-			vkFreeMemory(device, stagingBufferMemory, nullptr);
+			stagingBuffer.DestroyBuffer();
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -1108,27 +1107,27 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory)
-		{
-			VkDevice const logicalDevice = m_device.GetLogicalDevice();
-			if (vkCreateBuffer(logicalDevice, &_createInfo, nullptr, &o_buffer) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create buffer!");
-			}
+		//void Renderer::CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory)
+		//{
+		//	VkDevice const logicalDevice = m_device.GetLogicalDevice();
+		//	if (vkCreateBuffer(logicalDevice, &_createInfo, nullptr, &o_buffer) != VK_SUCCESS) {
+		//		throw std::runtime_error("failed to create buffer!");
+		//	}
 
-			VkMemoryRequirements memRequirements;
-			vkGetBufferMemoryRequirements(logicalDevice, o_buffer, &memRequirements);
+		//	VkMemoryRequirements memRequirements;
+		//	vkGetBufferMemoryRequirements(logicalDevice, o_buffer, &memRequirements);
 
-			VkMemoryAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			allocInfo.allocationSize = memRequirements.size;
-			allocInfo.memoryTypeIndex = m_device.FindMemoryType(memRequirements.memoryTypeBits, _properties);
+		//	VkMemoryAllocateInfo allocInfo{};
+		//	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		//	allocInfo.allocationSize = memRequirements.size;
+		//	allocInfo.memoryTypeIndex = m_device.FindMemoryType(memRequirements.memoryTypeBits, _properties);
 
-			if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &o_bufferMemory) != VK_SUCCESS) { // TODO - group model buffers and stuff - vkALlocateMemory is limited https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer (conclusion)
-				throw std::runtime_error("failed to allocate buffer memory!");
-			}
+		//	if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &o_bufferMemory) != VK_SUCCESS) { // TODO - group model buffers and stuff - vkALlocateMemory is limited https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer (conclusion)
+		//		throw std::runtime_error("failed to allocate buffer memory!");
+		//	}
 
-			vkBindBufferMemory(logicalDevice, o_buffer, o_bufferMemory, 0);
-		}
+		//	vkBindBufferMemory(logicalDevice, o_buffer, o_bufferMemory, 0);
+		//}
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateInstance()
