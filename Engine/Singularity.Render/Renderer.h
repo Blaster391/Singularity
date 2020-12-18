@@ -72,7 +72,7 @@ namespace Singularity
 			void CreateCommandPool();
 			void CreateCommandBuffers();
 
-			void CreateSemaphores();
+			void CreateSyncObjects();
 
 			void CreateTextureImage();
 			void CreateTextureImageView();
@@ -114,14 +114,19 @@ namespace Singularity
 			VkCommandPool m_commandPool;
 			std::vector<VkCommandBuffer> m_commandBuffers;
 
-			VkSemaphore m_imageAvailableSemaphore;
-			VkSemaphore m_renderFinishedSemaphore;
+			std::vector<VkSemaphore> m_imageAvailableSemaphores;
+			std::vector<VkSemaphore> m_renderFinishedSemaphores;
+			std::vector<VkFence> m_inFlightFences;
+			std::vector<VkFence> m_imagesInFlight;
 
 			Device m_device;
 			Validation m_validation;
 			SwapChain m_swapChain;
 
 			Window::Window& m_window;
+
+			static uint64 constexpr MAX_FRAMES_IN_FLIGHT = 2u;
+			uint64 m_currentFrame = 0u;
 
 			Mesh m_testMesh;
 			Mesh m_testMesh2;

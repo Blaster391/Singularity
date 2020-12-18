@@ -47,13 +47,23 @@ namespace Singularity
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::Update(float _timeStep)
 		{
+			VkDevice const device = m_device.GetLogicalDevice();
+			vkWaitForFences(device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+	
 			uint32 imageIndex;
-			VkResult const result = vkAcquireNextImageKHR(m_device.GetLogicalDevice(), m_swapChain.GetSwapChain(), UINT64_MAX, m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+			VkResult result = vkAcquireNextImageKHR(device, m_swapChain.GetSwapChain(), UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+			// Check if a previous frame is using this image (i.e. there is its fence to wait on)
+			if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+				vkWaitForFences(device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+			}
+			// Mark the image as now being in use by this frame
+			m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
 
 			if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 				RebuildSwapChain();
 				CreateCommandBuffers();
-				return;
+				// return;
 			}
 			else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 				throw std::runtime_error("failed to acquire swap chain image!");
@@ -64,7 +74,7 @@ namespace Singularity
 			VkSubmitInfo submitInfo{};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-			VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphore };
+			VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphores[m_currentFrame] };
 			VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 			submitInfo.waitSemaphoreCount = 1;
 			submitInfo.pWaitSemaphores = waitSemaphores;
@@ -72,11 +82,13 @@ namespace Singularity
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &m_commandBuffers[imageIndex];
 
-			VkSemaphore signalSemaphores[] = { m_renderFinishedSemaphore };
+			VkSemaphore signalSemaphores[] = { m_renderFinishedSemaphores[m_currentFrame] };
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = signalSemaphores;
 
-			if (vkQueueSubmit(m_device.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
+			vkResetFences(device, 1, &m_inFlightFences[m_currentFrame]);
+
+			if (vkQueueSubmit(m_device.GetGraphicsQueue(), 1, &submitInfo, m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
 				throw std::runtime_error("failed to submit draw command buffer!");
 			}
 
@@ -91,9 +103,17 @@ namespace Singularity
 			presentInfo.pImageIndices = &imageIndex;
 			presentInfo.pResults = nullptr;
 
-			vkQueuePresentKHR(m_device.GetPresentQueue(), &presentInfo);
+			result = vkQueuePresentKHR(m_device.GetPresentQueue(), &presentInfo);
 
-			vkQueueWaitIdle(m_device.GetPresentQueue()); // TODO not optimal
+			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+				RebuildSwapChain();
+				CreateCommandBuffers();
+			}
+			else if (result != VK_SUCCESS) {
+				throw std::runtime_error("failed to present swap chain image!");
+			}
+
+			m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -134,16 +154,20 @@ namespace Singularity
 			CreateVertexBuffer();
 			CreateCommandBuffers();
 
-			CreateSemaphores();
+			CreateSyncObjects();
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::Shutdown()
 		{
 			VkDevice const device = m_device.GetLogicalDevice();
+			vkDeviceWaitIdle(device);
 
-			vkDestroySemaphore(device, m_renderFinishedSemaphore, nullptr);
-			vkDestroySemaphore(device, m_imageAvailableSemaphore, nullptr);
+			for (uint64 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+				vkDestroySemaphore(device, m_renderFinishedSemaphores[i], nullptr);
+				vkDestroySemaphore(device, m_imageAvailableSemaphores[i], nullptr);
+				vkDestroyFence(device, m_inFlightFences[i], nullptr);
+			}
 
 			m_testMesh2.Unbuffer();
 			m_testMesh.Unbuffer();
@@ -411,7 +435,7 @@ namespace Singularity
 			pipelineInfo.pViewportState = &viewportState;
 			pipelineInfo.pRasterizationState = &rasterizer;
 			pipelineInfo.pMultisampleState = &multisampling;
-			pipelineInfo.pDepthStencilState = nullptr;
+			pipelineInfo.pDepthStencilState = &depthStencil;
 			pipelineInfo.pColorBlendState = &colorBlending;
 			pipelineInfo.pDynamicState = nullptr;
 			pipelineInfo.layout = m_pipelineLayout;
@@ -419,7 +443,6 @@ namespace Singularity
 			pipelineInfo.subpass = 0;
 			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 			pipelineInfo.basePipelineIndex = -1;
-			pipelineInfo.pDepthStencilState = &depthStencil;
 
 			if (vkCreateGraphicsPipelines(m_device.GetLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create graphics pipeline!");
@@ -811,61 +834,29 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
-		//void Renderer::CopyBuffer(VkBuffer _sourceBuffer, VkBuffer _destBuffer, VkDeviceSize _size)
-		//{
-		//	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-		//	VkBufferCopy copyRegion{};
-		//	copyRegion.size = _size;
-		//	vkCmdCopyBuffer(commandBuffer, _sourceBuffer, _destBuffer, 1, &copyRegion);
-
-		//	EndSingleTimeCommands(commandBuffer);
-		//}
-
-		////////////////////////////////////////////////////////////////////////////////////////
-		//void Renderer::CopyBufferToImage(VkBuffer _buffer, VkImage _image, uint32 _width, uint32 _height)
-		//{
-		//	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-		//	VkBufferImageCopy region{};
-		//	region.bufferOffset = 0;
-		//	region.bufferRowLength = 0;
-		//	region.bufferImageHeight = 0;
-
-		//	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		//	region.imageSubresource.mipLevel = 0;
-		//	region.imageSubresource.baseArrayLayer = 0;
-		//	region.imageSubresource.layerCount = 1;
-
-		//	region.imageOffset = { 0, 0, 0 };
-		//	region.imageExtent = {
-		//		_width,
-		//		_height,
-		//		1
-		//	};
-
-		//	vkCmdCopyBufferToImage(
-		//		commandBuffer,
-		//		_buffer,
-		//		_image,
-		//		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		//		1,
-		//		&region
-		//	);
-
-		//	EndSingleTimeCommands(commandBuffer);
-		//}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateSemaphores()
+		void Renderer::CreateSyncObjects()
 		{
+			m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+			m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+			m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+			m_imagesInFlight.resize(m_swapChain.GetImageViews().size(), VK_NULL_HANDLE);
+
+			VkDevice const device = m_device.GetLogicalDevice();
+
 			VkSemaphoreCreateInfo semaphoreInfo{};
 			semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-			if (vkCreateSemaphore(m_device.GetLogicalDevice(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphore) != VK_SUCCESS ||
-				vkCreateSemaphore(m_device.GetLogicalDevice(), &semaphoreInfo, nullptr, &m_renderFinishedSemaphore) != VK_SUCCESS) {
+			VkFenceCreateInfo fenceInfo{};
+			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-				throw std::runtime_error("failed to create semaphores!");
+			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+				if ((vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) != VK_SUCCESS) ||
+					(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) != VK_SUCCESS) ||
+					(vkCreateFence(device, &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS)){
+
+					throw std::runtime_error("failed to create semaphores for a frame!");
+				}
 			}
 		}
 
