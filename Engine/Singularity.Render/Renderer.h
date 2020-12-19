@@ -7,6 +7,7 @@
 #include <Singularity.Render/Image.h>
 #include <Singularity.Render/GenericUniformBufferObject.h>
 #include <Singularity.Render/Mesh.h>
+#include <Singularity.Render/Texture.h>
 #include <Singularity.Render/SwapChain.h>
 #include <Singularity.Render/Validation.h>
 
@@ -76,8 +77,6 @@ namespace Singularity
 			void CreateSyncObjects();
 
 			void CreateTextureImage();
-			void CreateTextureImageView();
-			void CreateTextureSampler();
 
 			void CreateDepthResources();
 			VkFormat FindDepthFormat() const;
@@ -97,8 +96,7 @@ namespace Singularity
 			VkPipeline m_graphicsPipeline;
 			VkPipelineLayout m_pipelineLayout;
 
-			Image m_textureImage;
-			VkSampler m_textureSampler;
+			Texture m_texture;
 
 			Image m_depthImage;
 
