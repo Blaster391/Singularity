@@ -28,11 +28,13 @@ namespace Singularity
 			m_device(*this),
 			m_validation(*this),
 			m_swapChain(*this),
+			m_uniformBufferAllocator(*this),
 			m_window(_window),
 			m_depthImage(*this),
 			m_texture(*this),
 			m_testMesh(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/anky.obj")),
-			m_testMesh2(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/testSphere.obj"))
+			m_testMesh2(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/testSphere.obj")),
+			m_testObject(*this)
 		{
 			Initialize();
 		}
@@ -68,7 +70,7 @@ namespace Singularity
 				throw std::runtime_error("failed to acquire swap chain image!");
 			}
 			
-			UpdateUniformBuffers(imageIndex);
+			m_testObject.UpdateUniformBuffer(imageIndex);
 
 			VkSubmitInfo submitInfo{};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -146,7 +148,7 @@ namespace Singularity
 
 			CreateDescriptorSetLayout();
 
-			CreateUniformBuffers();
+			m_uniformBufferAllocator.CreateUniformBuffers();
 
 			CreatePipeline();
 		
@@ -171,11 +173,9 @@ namespace Singularity
 			m_testMesh2.Unbuffer();
 			m_testMesh.Unbuffer();
 
-			DestroyPipeline();
+			m_uniformBufferAllocator.DestroyBuffers();
 
-			for (size_t i = 0; i < m_swapChain.GetImageViews().size(); i++) {
-				m_uniformBuffers[i].DestroyBuffer();
-			}
+			DestroyPipeline();
 			
 			vkDestroyDescriptorSetLayout(device, m_descriptorSetLayout, nullptr);
 
@@ -188,30 +188,6 @@ namespace Singularity
 
 			vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 			vkDestroyInstance(m_instance, nullptr);
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::UpdateUniformBuffers(uint32 _imageIndex)
-		{
-			static auto startTime = std::chrono::high_resolution_clock::now();
-
-			auto currentTime = std::chrono::high_resolution_clock::now();
-			float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-			GenericUniformBufferObject ubo{};
-			ubo.m_model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
-			ubo.m_view = glm::lookAt(glm::vec3(0.0f, 3.0f, 10.0f), glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-
-			VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
-			ubo.m_projection = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 1000.0f);
-
-			ubo.m_projection[1][1] *= -1;
-
-			void* data;
-			vkMapMemory(m_device.GetLogicalDevice(), m_uniformBuffers[_imageIndex].GetBufferMemory(), 0, sizeof(ubo), 0, &data);
-			memcpy(data, &ubo, sizeof(ubo));
-			vkUnmapMemory(m_device.GetLogicalDevice(), m_uniformBuffers[_imageIndex].GetBufferMemory());
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -251,14 +227,17 @@ namespace Singularity
 			CreateCommandPool(); // TODO ordering and cleanup and not rebuilding stuff i shouldn't
 								 // Can not just make this command pool once? Would have to free commands manually tho
 
-			CreateDescriptorPool();
+			CreateDescriptorPool(); // TODO ordering and cleanup and not rebuilding stuff i shouldn't
 
 			CreateDepthResources();
 			CreateFramebuffers();
 
 			CreateTextureImage();
 
-			CreateDescriptorSets();
+			m_testObject.SetupUniform();
+			m_testObject.SetMesh(&m_testMesh);
+			m_testObject.SetTexture(&m_texture);
+			m_testObject.CreateDescriptorSets();
 			
 		}
 
@@ -587,25 +566,6 @@ namespace Singularity
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateUniformBuffers()
-		{
-			size_t const imageViewCount = m_swapChain.GetImageViews().size();
-			m_uniformBuffers.reserve(imageViewCount);
-
-			
-			VkBufferCreateInfo bufferInfo{}; // TODO allocate multiple slots for multiple objects
-			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = sizeof(GenericUniformBufferObject);
-			bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-			for (size_t i = 0; i < imageViewCount; i++) {
-				Buffer& newBuffer = m_uniformBuffers.emplace_back(*this);
-				newBuffer.CreateBuffer(bufferInfo, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-			}
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateDescriptorPool()
 		{
 			uint32 const imageViewCount = static_cast<uint32>(m_swapChain.GetImageViews().size());
@@ -626,58 +586,6 @@ namespace Singularity
 			VkDevice const logicalDevice = m_device.GetLogicalDevice();
 			if (vkCreateDescriptorPool(logicalDevice, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create descriptor pool!");
-			}
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateDescriptorSets()
-		{
-			uint32 const descriptorCount = static_cast<uint32>(m_swapChain.GetImageViews().size());
-			std::vector<VkDescriptorSetLayout> layouts(descriptorCount, m_descriptorSetLayout);
-			VkDescriptorSetAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			allocInfo.descriptorPool = m_descriptorPool;
-			allocInfo.descriptorSetCount = descriptorCount;
-			allocInfo.pSetLayouts = layouts.data();
-
-			m_descriptorSets.resize(descriptorCount);
-			VkDevice const logicalDevice = m_device.GetLogicalDevice();
-			if (vkAllocateDescriptorSets(logicalDevice, &allocInfo, m_descriptorSets.data()) != VK_SUCCESS) {
-				throw std::runtime_error("failed to allocate descriptor sets!");
-			}
-
-			for (size_t i = 0; i < descriptorCount; i++) {
-				VkDescriptorBufferInfo bufferInfo{};
-				bufferInfo.buffer = m_uniformBuffers[i].GetBuffer();
-				bufferInfo.offset = 0;
-				bufferInfo.range = sizeof(GenericUniformBufferObject);
-
-				VkDescriptorImageInfo imageInfo{};
-				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				imageInfo.imageView = m_texture.GetTextureImage().GetImageView();
-				imageInfo.sampler = m_texture.GetTextureSampler();
-
-				VkWriteDescriptorSet descriptorWrite{};
-				std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-
-				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrites[0].dstSet = m_descriptorSets[i];
-				descriptorWrites[0].dstBinding = 0;
-				descriptorWrites[0].dstArrayElement = 0;
-				descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				descriptorWrites[0].descriptorCount = 1;
-				descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-				descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrites[1].dstSet = m_descriptorSets[i];
-				descriptorWrites[1].dstBinding = 1;
-				descriptorWrites[1].dstArrayElement = 0;
-				descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				descriptorWrites[1].descriptorCount = 1;
-				descriptorWrites[1].pImageInfo = &imageInfo;
-
-				vkUpdateDescriptorSets(logicalDevice, static_cast<uint32>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-
 			}
 		}
 
@@ -737,48 +645,7 @@ namespace Singularity
 
 				vkCmdBindPipeline(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-				if (m_testMesh.UseIndices())
-				{
-					VkBuffer vertexBuffers[] = { m_testMesh.GetVertexBuffer()->GetBuffer() };
-					VkDeviceSize offsets[] = { 0 };
-					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
-					vkCmdBindIndexBuffer(m_commandBuffers[i], m_testMesh.GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
-					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-					vkCmdDrawIndexed(m_commandBuffers[i], m_testMesh.GetIndexCount(), 1, 0, 0, 0); 
-				}
-				else
-				{
-					VkBuffer vertexBuffers[] = { m_testMesh.GetVertexBuffer()->GetBuffer() };
-					VkDeviceSize offsets[] = { 0 };
-					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
-
-					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-					vkCmdDraw(m_commandBuffers[i], m_testMesh.GetVertexCount(), 1, 0, 0);
-				}
-
-
-				if (m_testMesh2.UseIndices())
-				{
-					VkBuffer vertexBuffers[] = { m_testMesh2.GetVertexBuffer()->GetBuffer() };
-					VkDeviceSize offsets[] = { 0 };
-					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
-					vkCmdBindIndexBuffer(m_commandBuffers[i], m_testMesh2.GetIndexBuffer()->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
-					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-					vkCmdDrawIndexed(m_commandBuffers[i], m_testMesh2.GetIndexCount(), 1, 0, 0, 0);
-				}
-				else
-				{
-					VkBuffer vertexBuffers[] = { m_testMesh2.GetVertexBuffer()->GetBuffer() };
-					VkDeviceSize offsets[] = { 0 };
-					vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, vertexBuffers, offsets);
-
-					vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
-					vkCmdDraw(m_commandBuffers[i], m_testMesh2.GetVertexCount(), 1, 0, 0);
-				}
-
-
+				m_testObject.WriteDrawToCommandBuffer(m_commandBuffers[i], i);
 
 				vkCmdEndRenderPass(m_commandBuffers[i]);
 
