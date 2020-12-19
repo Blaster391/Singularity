@@ -32,6 +32,8 @@ namespace Singularity
 			m_validation(*this),
 			m_swapChain(*this),
 			m_window(_window),
+			m_depthImage(*this),
+			m_textureImage(*this),
 			m_testMesh(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/anky.obj")),
 			m_testMesh2(MeshLoader::LoadObj(std::string(DATA_DIRECTORY) + "Models/testSphere.obj"))
 		{
@@ -270,14 +272,10 @@ namespace Singularity
 		{
 			VkDevice const logicalDevice = m_device.GetLogicalDevice();
 
-			vkDestroyImageView(logicalDevice, m_depthImageView, nullptr);
-			vkDestroyImage(logicalDevice, m_depthImage, nullptr);
-			vkFreeMemory(logicalDevice, m_depthImageMemory, nullptr);
+			m_depthImage.DestroyImage();
 
 			vkDestroySampler(logicalDevice, m_textureSampler, nullptr);
-			vkDestroyImageView(logicalDevice, m_textureImageView, nullptr);
-			vkDestroyImage(logicalDevice, m_textureImage, nullptr);
-			vkFreeMemory(logicalDevice, m_textureImageMemory, nullptr);
+			m_textureImage.DestroyImage();
 
 			vkDestroyCommandPool(logicalDevice, m_commandPool, nullptr);
 
@@ -540,7 +538,7 @@ namespace Singularity
 			for (size_t i = 0; i < imageViews.size(); i++) {
 				std::array<VkImageView, 2> attachments = {
 					imageViews[i],
-					m_depthImageView
+					m_depthImage.GetImageView()
 				};
 
 				VkFramebufferCreateInfo framebufferInfo{};
@@ -662,7 +660,7 @@ namespace Singularity
 
 				VkDescriptorImageInfo imageInfo{};
 				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				imageInfo.imageView = m_textureImageView;
+				imageInfo.imageView = m_textureImage.GetImageView();
 				imageInfo.sampler = m_textureSampler;
 
 				VkWriteDescriptorSet descriptorWrite{};
@@ -893,11 +891,11 @@ namespace Singularity
 
 			stbi_image_free(pixels);
 
-			CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_textureImage, m_textureImageMemory);
+			m_textureImage.CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
 
-			TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			stagingBuffer.CopyBufferToImage(m_textureImage, static_cast<uint32>(texWidth), static_cast<uint32>(texHeight));
-			TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			m_textureImage.TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			stagingBuffer.CopyBufferToImage(m_textureImage.GetImage(), static_cast<uint32>(texWidth), static_cast<uint32>(texHeight));
+			m_textureImage.TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 			stagingBuffer.DestroyBuffer();
 		}
@@ -905,7 +903,6 @@ namespace Singularity
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateTextureImageView()
 		{
-			m_textureImageView = CreateImageView(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -935,136 +932,16 @@ namespace Singularity
 			if (vkCreateSampler(m_device.GetLogicalDevice(), &samplerInfo, nullptr, &m_textureSampler) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create texture sampler!");
 			}
-
-
 		}
 
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::CreateImage(uint32 _width, uint32 _height, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) const
-		{
-
-			VkImageCreateInfo imageInfo{};
-			imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-			imageInfo.imageType = VK_IMAGE_TYPE_2D;
-			imageInfo.extent.width = static_cast<uint32_t>(_width);
-			imageInfo.extent.height = static_cast<uint32_t>(_height);
-			imageInfo.extent.depth = 1;
-			imageInfo.mipLevels = 1;
-			imageInfo.arrayLayers = 1;
-			imageInfo.format = _format;
-			imageInfo.tiling = _tiling;
-			imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			imageInfo.usage = _usage;
-			imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-			imageInfo.flags = 0; // Optional
-
-
-			VkDevice const device = m_device.GetLogicalDevice();
-			if (vkCreateImage(device, &imageInfo, nullptr, &_image) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create image!");
-			}
-
-			VkMemoryRequirements memRequirements;
-			vkGetImageMemoryRequirements(device, _image, &memRequirements);
-
-			VkMemoryAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			allocInfo.allocationSize = memRequirements.size;
-			allocInfo.memoryTypeIndex = m_device.FindMemoryType(memRequirements.memoryTypeBits, _properties);
-
-			if (vkAllocateMemory(device, &allocInfo, nullptr, &_imageMemory) != VK_SUCCESS) {
-				throw std::runtime_error("failed to allocate image memory!");
-			}
-
-			vkBindImageMemory(device, _image, _imageMemory, 0);
-
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		VkImageView Renderer::CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags)
-		{
-			VkImageViewCreateInfo viewInfo{};
-			viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			viewInfo.image = _image;
-			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			viewInfo.format = _format;
-			viewInfo.subresourceRange.aspectMask = _aspectFlags;
-			viewInfo.subresourceRange.baseMipLevel = 0;
-			viewInfo.subresourceRange.levelCount = 1;
-			viewInfo.subresourceRange.baseArrayLayer = 0;
-			viewInfo.subresourceRange.layerCount = 1;
-
-			VkImageView imageView;
-			if (vkCreateImageView(m_device.GetLogicalDevice(), &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
-				throw std::runtime_error("failed to create texture image view!");
-			}
-
-			return imageView;
-		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		void Renderer::TransitionImageLayout(VkImage _image, VkFormat _format, VkImageLayout _oldLayout, VkImageLayout _newLayout)
-		{
-			VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-			VkImageMemoryBarrier barrier{};
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.oldLayout = _oldLayout;
-			barrier.newLayout = _newLayout;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-			barrier.image = _image;
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = 1;
-			barrier.subresourceRange.baseArrayLayer = 0;
-			barrier.subresourceRange.layerCount = 1;
-
-			barrier.srcAccessMask = 0; // TODO - mip maps
-			barrier.dstAccessMask = 0; // TODO
-
-			VkPipelineStageFlags sourceStage;
-			VkPipelineStageFlags destinationStage;
-
-			if (_oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && _newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-				barrier.srcAccessMask = 0;
-				barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-				sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-				destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			}
-			else if (_oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && _newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-				barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-				sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-				destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-			}
-			else {
-				throw std::invalid_argument("unsupported layout transition!");
-			}
-
-			vkCmdPipelineBarrier(
-				commandBuffer,
-				sourceStage, destinationStage,
-				0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier
-			);
-
-			EndSingleTimeCommands(commandBuffer);
-		}
+		
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateDepthResources()
 		{
 			VkFormat const depthFormat = FindDepthFormat();
 			VkExtent2D const swapChainExtent = m_swapChain.GetExtent();
-			CreateImage(swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
-			m_depthImageView = CreateImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+			m_depthImage.CreateImage(swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 		}
 
 		//////////////////////////////////////////////////////////////////////////////////////
@@ -1096,29 +973,6 @@ namespace Singularity
 
 			throw std::runtime_error("failed to find supported format!");
 		}
-
-		//////////////////////////////////////////////////////////////////////////////////////
-		//void Renderer::CreateBuffer(VkBufferCreateInfo _createInfo, VkMemoryPropertyFlags _properties, VkBuffer& o_buffer, VkDeviceMemory& o_bufferMemory)
-		//{
-		//	VkDevice const logicalDevice = m_device.GetLogicalDevice();
-		//	if (vkCreateBuffer(logicalDevice, &_createInfo, nullptr, &o_buffer) != VK_SUCCESS) {
-		//		throw std::runtime_error("failed to create buffer!");
-		//	}
-
-		//	VkMemoryRequirements memRequirements;
-		//	vkGetBufferMemoryRequirements(logicalDevice, o_buffer, &memRequirements);
-
-		//	VkMemoryAllocateInfo allocInfo{};
-		//	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		//	allocInfo.allocationSize = memRequirements.size;
-		//	allocInfo.memoryTypeIndex = m_device.FindMemoryType(memRequirements.memoryTypeBits, _properties);
-
-		//	if (vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &o_bufferMemory) != VK_SUCCESS) { // TODO - group model buffers and stuff - vkALlocateMemory is limited https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer (conclusion)
-		//		throw std::runtime_error("failed to allocate buffer memory!");
-		//	}
-
-		//	vkBindBufferMemory(logicalDevice, o_buffer, o_bufferMemory, 0);
-		//}
 
 		//////////////////////////////////////////////////////////////////////////////////////
 		void Renderer::CreateInstance()

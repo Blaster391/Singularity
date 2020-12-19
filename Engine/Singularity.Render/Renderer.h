@@ -4,6 +4,7 @@
 
 #include <Singularity.Core/CoreDeclare.h>
 #include <Singularity.Render/Device.h>
+#include <Singularity.Render/Image.h>
 #include <Singularity.Render/GenericUniformBufferObject.h>
 #include <Singularity.Render/Mesh.h>
 #include <Singularity.Render/SwapChain.h>
@@ -78,10 +79,6 @@ namespace Singularity
 			void CreateTextureImageView();
 			void CreateTextureSampler();
 
-			void CreateImage(uint32 _width, uint32 _height, VkFormat _format, VkImageTiling _tiling, VkImageUsageFlags _usage, VkMemoryPropertyFlags _properties, VkImage& _image, VkDeviceMemory& _imageMemory) const;
-			VkImageView CreateImageView(VkImage _image, VkFormat _format, VkImageAspectFlags _aspectFlags);
-			void TransitionImageLayout(VkImage _image, VkFormat _format, VkImageLayout _oldLayout, VkImageLayout _newLayout);
-
 			void CreateDepthResources();
 			VkFormat FindDepthFormat() const;
 			bool HasStencilComponent(VkFormat _format) const;
@@ -100,14 +97,10 @@ namespace Singularity
 			VkPipeline m_graphicsPipeline;
 			VkPipelineLayout m_pipelineLayout;
 
-			VkImage m_textureImage;
-			VkImageView m_textureImageView;
-			VkDeviceMemory m_textureImageMemory;
+			Image m_textureImage;
 			VkSampler m_textureSampler;
 
-			VkImage m_depthImage;
-			VkDeviceMemory m_depthImageMemory;
-			VkImageView m_depthImageView;
+			Image m_depthImage;
 
 			std::vector<Buffer> m_uniformBuffers;
 
